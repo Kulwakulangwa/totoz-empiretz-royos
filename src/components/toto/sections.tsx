@@ -135,7 +135,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         (p) =>
           p.sku.toLowerCase() === query.trim().toLowerCase() || p.barcode === query.trim(),
       );
-    if (!item) return toast("No product matches that barcode or name in this shop.");
+    if (!item) {
+      toast("No product matches that barcode or name in this shop.");
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((row) => row.sku === item.sku);
       return existing
@@ -262,7 +265,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         <button
           className={cn(btnPrimary, "w-full")}
           onClick={() => {
-            if (!cart.length) return toast("Add at least one product before completing a sale.");
+            if (!cart.length) {
+              toast("Add at least one product before completing a sale.");
+              return;
+            }
             toast(`Receipt #${receipt} completed by ${pay}: ${money(total)}`, {
               description: `${assigned} - ${cashier} - stock reduced automatically.`,
             });
