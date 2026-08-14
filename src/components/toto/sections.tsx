@@ -405,7 +405,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
               toast("Add a product first.");
               return;
             }
-            setAdjust({ sku: rows[0]?.sku ?? products[0].sku, delta: "", reason: "" });
+            setAdjust({ sku: rows[0]?.sku ?? products[0]!.sku, delta: "", reason: "" });
           }}
         >
           Stock adjustment
@@ -651,7 +651,7 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     branch: (shop === "all" ? "kariakoo" : shop) as BranchId,
-    category: expenseCategories[0],
+    category: expenseCategories[0] ?? "Other",
     description: "",
     amount: "",
   });
