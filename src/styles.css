@@ -19,9 +19,9 @@
  */
 
 @theme inline {
-  --font-display: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
   --color-night: var(--night);
   --color-cream: var(--cream);
   --color-coral: var(--coral);
@@ -77,36 +77,36 @@
 
 :root {
   --radius: 0.5rem;
-  --background: oklch(0.954 0.016 82.8);
-  --foreground: oklch(0.21 0.018 289.9);
-  --card: oklch(0.994 0.007 88.6);
-  --card-foreground: oklch(0.21 0.018 289.9);
-  --popover: oklch(0.994 0.007 88.6);
-  --popover-foreground: oklch(0.21 0.018 289.9);
-  --primary: oklch(0.251 0.023 292.3);
-  --primary-foreground: oklch(0.982 0.016 79.4);
-  --secondary: oklch(0.96 0.013 82.4);
-  --secondary-foreground: oklch(0.251 0.023 292.3);
-  --muted: oklch(0.96 0.013 82.4);
-  --muted-foreground: oklch(0.498 0.024 297.7);
-  --accent: oklch(0.955 0.016 79.4);
-  --accent-foreground: oklch(0.251 0.023 292.3);
-  --destructive: oklch(0.543 0.15 32.6);
-  --destructive-foreground: oklch(0.982 0.016 79.4);
-  --border: oklch(0.886 0.025 81.1);
-  --input: oklch(0.886 0.025 81.1);
-  --ring: oklch(0.658 0.15 33.1);
-  --night: oklch(0.251 0.023 292.3);
-  --cream: oklch(0.982 0.016 79.4);
-  --coral: oklch(0.658 0.15 33.1);
-  --teal: oklch(0.525 0.085 186.4);
-  --amber: oklch(0.636 0.123 66);
-  --violet: oklch(0.48 0.078 300.7);
-  --gold: oklch(0.616 0.115 82);
-  --success: oklch(0.52 0.104 161);
-  --danger: oklch(0.543 0.15 32.6);
-  --track: oklch(0.925 0.02 77.3);
-  --shadow-panel: 0 20px 45px oklch(0.21 0.018 289.9 / 0.1);
+  --background: oklch(0.978 0.002 247);
+  --foreground: oklch(0.23 0.014 258);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.23 0.014 258);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.23 0.014 258);
+  --primary: oklch(0.32 0.045 245);
+  --primary-foreground: oklch(0.99 0.002 247);
+  --secondary: oklch(0.96 0.004 247);
+  --secondary-foreground: oklch(0.32 0.045 245);
+  --muted: oklch(0.96 0.004 247);
+  --muted-foreground: oklch(0.52 0.012 256);
+  --accent: oklch(0.955 0.005 247);
+  --accent-foreground: oklch(0.32 0.045 245);
+  --destructive: oklch(0.52 0.16 26);
+  --destructive-foreground: oklch(0.99 0.002 247);
+  --border: oklch(0.912 0.005 250);
+  --input: oklch(0.912 0.005 250);
+  --ring: oklch(0.45 0.07 240);
+  --night: oklch(0.23 0.014 258);
+  --cream: oklch(0.99 0.002 247);
+  --coral: oklch(0.52 0.16 26);
+  --teal: oklch(0.48 0.07 200);
+  --amber: oklch(0.6 0.11 70);
+  --violet: oklch(0.45 0.06 285);
+  --gold: oklch(0.6 0.09 85);
+  --success: oklch(0.48 0.1 160);
+  --danger: oklch(0.52 0.16 26);
+  --track: oklch(0.93 0.004 250);
+  --shadow-panel: 0 1px 2px oklch(0.23 0.014 258 / 0.06);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -163,31 +163,21 @@
   }
 
   body {
-    background:
-      linear-gradient(180deg, oklch(1 0 0 / 0.68), transparent 360px),
-      radial-gradient(circle at 16% 0%, oklch(0.658 0.15 33.1 / 0.13), transparent 34%),
-      linear-gradient(135deg, oklch(0.966 0.011 84) 0%, oklch(0.938 0.021 82) 42%, oklch(0.972 0.006 100) 100%);
-    background-attachment: fixed;
+    background: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
   }
 
   h1, h2, h3 {
     font-family: var(--font-display);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
   }
 }
 
 @utility panel {
-  background: oklch(0.994 0.007 88.6 / 0.88);
+  background: var(--color-card);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-panel);
-}
-
-@utility eyebrow {
-  font-size: 0.72rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
 }
