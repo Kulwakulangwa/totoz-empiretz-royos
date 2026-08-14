@@ -1,5 +1,20 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { branches, type Activity, type BranchId, type Expense, type Product, type Staff } from "@/lib/toto-data";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  branches,
+  type Activity,
+  type BranchId,
+  type Expense,
+  type Product,
+  type Staff,
+} from "@/lib/toto-data";
 
 export type SaleLine = { sku: string; name: string; qty: number; sell: number; buy: number };
 export type Sale = {
@@ -23,7 +38,14 @@ type State = {
   receipt: number;
 };
 
-const EMPTY: State = { products: [], sales: [], expenses: [], staff: [], activities: [], receipt: 1 };
+const EMPTY: State = {
+  products: [],
+  sales: [],
+  expenses: [],
+  staff: [],
+  activities: [],
+  receipt: 1,
+};
 const KEY = "toto-empire-state-v1";
 
 type Ctx = State & {
@@ -48,7 +70,8 @@ type Ctx = State & {
 const StoreContext = createContext<Ctx | null>(null);
 
 const today = () => new Date().toISOString().slice(0, 10);
-const timeLabel = () => new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const timeLabel = () =>
+  new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
 export function TotoStoreProvider({ children }: { children: ReactNode }) {
@@ -74,14 +97,22 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state, hydrated]);
 
-  const log = (title: string, desc: string) => (prev: State): State => ({
-    ...prev,
-    activities: [{ title, desc, time: `${today()} ${timeLabel()}` }, ...prev.activities].slice(0, 40),
-  });
+  const log =
+    (title: string, desc: string) =>
+    (prev: State): State => ({
+      ...prev,
+      activities: [{ title, desc, time: `${today()} ${timeLabel()}` }, ...prev.activities].slice(
+        0,
+        40,
+      ),
+    });
 
   const addProduct = useCallback((p: Product) => {
     setState((prev) => {
-      const next = log("Product added", `${p.name} · ${p.branch} · ${p.qty} in stock`)({
+      const next = log(
+        "Product added",
+        `${p.name} · ${p.branch} · ${p.qty} in stock`,
+      )({
         ...prev,
         products: [...prev.products.filter((x) => x.sku !== p.sku), p],
       });
@@ -93,14 +124,20 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     setState((prev) => {
       const target = prev.products.find((p) => p.sku === sku);
       const products = prev.products.map((p) => (p.sku === sku ? { ...p, ...patch } : p));
-      return log("Product updated", `${target?.name ?? sku} details changed`)({ ...prev, products });
+      return log(
+        "Product updated",
+        `${target?.name ?? sku} details changed`,
+      )({ ...prev, products });
     });
   }, []);
 
   const removeProduct = useCallback((sku: string) => {
     setState((prev) => {
       const target = prev.products.find((p) => p.sku === sku);
-      return log("Product removed", `${target?.name ?? sku} deleted from inventory`)({
+      return log(
+        "Product removed",
+        `${target?.name ?? sku} deleted from inventory`,
+      )({
         ...prev,
         products: prev.products.filter((p) => p.sku !== sku),
       });
@@ -166,7 +203,10 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
   const addExpense = useCallback((e: Expense) => {
     setState((prev) =>
-      log("Expense recorded", `${e.category} · ${e.branch} · TZS ${e.amount.toLocaleString("en-US")}`)({
+      log(
+        "Expense recorded",
+        `${e.category} · ${e.branch} · TZS ${e.amount.toLocaleString("en-US")}`,
+      )({
         ...prev,
         expenses: [e, ...prev.expenses],
       }),
@@ -179,7 +219,10 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
   const addStaff = useCallback((s: Staff) => {
     setState((prev) =>
-      log("User added", `${s.name} · ${s.role} · ${s.branch}`)({ ...prev, staff: [...prev.staff, s] }),
+      log(
+        "User added",
+        `${s.name} · ${s.role} · ${s.branch}`,
+      )({ ...prev, staff: [...prev.staff, s] }),
     );
   }, []);
 
@@ -204,7 +247,20 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       removeStaff,
       resetAll,
     }),
-    [state, addProduct, updateProduct, removeProduct, adjustStock, findByCode, recordSale, addExpense, removeExpense, addStaff, removeStaff, resetAll],
+    [
+      state,
+      addProduct,
+      updateProduct,
+      removeProduct,
+      adjustStock,
+      findByCode,
+      recordSale,
+      addExpense,
+      removeExpense,
+      addStaff,
+      removeStaff,
+      resetAll,
+    ],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

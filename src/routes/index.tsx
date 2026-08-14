@@ -145,14 +145,18 @@ function Index() {
               ))}
             </div>
             {isOwner && (
-              <button className={btn} onClick={() => {
+              <button
+                className={btn}
+                onClick={() => {
                   if (!sales.length) {
                     toast("No sales recorded yet to export.");
                     return;
                   }
                   const header = "receipt,date,branch,cashier,payment,total\n";
                   const body = sales
-                    .map((s) => [s.receipt, s.date, s.branch, s.cashier, s.payment, s.total].join(","))
+                    .map((s) =>
+                      [s.receipt, s.date, s.branch, s.cashier, s.payment, s.total].join(","),
+                    )
                     .join("\n");
                   const url = URL.createObjectURL(new Blob([header + body], { type: "text/csv" }));
                   const a = document.createElement("a");
@@ -161,7 +165,8 @@ function Index() {
                   a.click();
                   URL.revokeObjectURL(url);
                   toast("Sales report exported");
-                }}>
+                }}
+              >
                 Export report
               </button>
             )}

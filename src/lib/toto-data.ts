@@ -70,14 +70,26 @@ export type Staff = { role: "Owner" | "Cashier"; name: string; branch: BranchId;
 export const staff: Staff[] = [];
 
 export const reports = [
-  { title: "Sales report", copy: "Sales by date, shop and cashier with receipt-level traceability." },
+  {
+    title: "Sales report",
+    copy: "Sales by date, shop and cashier with receipt-level traceability.",
+  },
   { title: "Payment report", copy: "Cash and Lipa Namba split for every shop and period." },
   { title: "Product sales", copy: "Products sold, quantities and category performance." },
-  { title: "Inventory report", copy: "Opening stock, added stock, sales reduction and adjustments." },
+  {
+    title: "Inventory report",
+    copy: "Opening stock, added stock, sales reduction and adjustments.",
+  },
   { title: "Low-stock report", copy: "Products that reached their minimum level, by shop." },
-  { title: "Expense report", copy: "Expenses by category, branch and period against shop revenue." },
+  {
+    title: "Expense report",
+    copy: "Expenses by category, branch and period against shop revenue.",
+  },
   { title: "Branch performance", copy: "Sales, expenses and profit comparison across all shops." },
-  { title: "Audit history", copy: "Sales, price edits, stock adjustments, expenses and user changes." },
+  {
+    title: "Audit history",
+    copy: "Sales, price edits, stock adjustments, expenses and user changes.",
+  },
 ];
 
 export const money = (value: number) => "TZS " + value.toLocaleString("en-US");
