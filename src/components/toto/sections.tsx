@@ -1,7 +1,8 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Panel, PanelHead, Pill, EmptyState, MiniCard } from "./primitives";
+import { BarcodeScanner } from "./BarcodeScanner";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import {
   type Product,
 } from "@/lib/toto-data";
 import { branchLabel, useToto, type SaleLine } from "@/lib/toto-store";
+import { Scan } from "lucide-react";
 
 export const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -119,6 +121,8 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [pay, setPay] = useState<"Cash" | "Lipa Namba">("Cash");
+  const [scanning, setScanning] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const activeBranch: BranchId = shop === "all" ? "kariakoo" : shop;
   const assigned = branchLabel(activeBranch);
@@ -136,15 +140,15 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
       p.barcode.toLowerCase().includes(q),
   );
 
-  function add(product?: Product) {
-    const exact = available.find(
-      (p) => p.barcode.toLowerCase() === q || p.sku.toLowerCase() === q,
-    );
-    const item = product ?? exact ?? (filtered.length === 1 ? filtered[0] : undefined);
-    if (!item) {
-      toast("No product matches that barcode or name in this shop.");
-      return;
+  function focusInput() {
+    const el = inputRef.current;
+    if (el) {
+      el.focus();
+      el.select();
     }
+  }
+
+  function addItem(item: Product, source: "scan" | "click" | "search") {
     setCart((prev) => {
       const existing = prev.find((row) => row.sku === item.sku);
       const inCart = existing?.qty ?? 0;
@@ -152,14 +156,71 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         toast(`Only ${item.qty} units of ${item.name} left in stock.`);
         return prev;
       }
+      if (source === "scan") {
+        toast(`Scanned: ${item.name}`, {
+          description: `Barcode ${item.barcode} · ${money(item.sell)}`,
+        });
+      }
       return existing
         ? prev.map((row) => (row.sku === item.sku ? { ...row, qty: row.qty + 1 } : row))
         : [
             ...prev,
-            { sku: item.sku, name: item.name, qty: 1, sell: item.sell, buy: item.buy, stock: item.qty },
+            {
+              sku: item.sku,
+              name: item.name,
+              qty: 1,
+              sell: item.sell,
+              buy: item.buy,
+              stock: item.qty,
+            },
           ];
     });
+  }
+
+  function add(product?: Product) {
+    if (product) {
+      addItem(product, "click");
+      setQuery("");
+      focusInput();
+      return;
+    }
+    if (!q) {
+      focusInput();
+      return;
+    }
+    const exact = available.find((p) => p.barcode.toLowerCase() === q || p.sku.toLowerCase() === q);
+    if (exact) {
+      addItem(exact, "scan");
+      setQuery("");
+      focusInput();
+      return;
+    }
+    if (filtered.length === 1) {
+      addItem(filtered[0]!, "search");
+      setQuery("");
+      focusInput();
+      return;
+    }
+    toast("No product matches that barcode or name in this shop.");
+    focusInput();
+  }
+
+  function scan(barcode: string) {
+    setScanning(false);
+    const clean = barcode.trim().toLowerCase();
+    if (!clean) return;
+    const match = available.find(
+      (p) => p.barcode.toLowerCase() === clean || p.sku.toLowerCase() === clean,
+    );
+    if (!match) {
+      toast("No product matches scanned barcode", { description: barcode });
+      setQuery(barcode);
+      focusInput();
+      return;
+    }
+    addItem(match, "scan");
     setQuery("");
+    focusInput();
   }
 
   function step(sku: string, delta: number) {
@@ -185,15 +246,23 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
       <Panel>
         <PanelHead title="Point of sale" description={`Assigned shop: ${assigned}`} />
-        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-            placeholder="Scan barcode or search product"
-            className="min-h-10 rounded-md border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-            autoFocus
-          />
+        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+          <div className="relative">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && add()}
+              placeholder="Scan barcode or search product"
+              className="min-h-10 w-full rounded-md border border-border bg-card px-3 pr-9 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              autoFocus
+            />
+            <Scan className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          </div>
+          <button className={btn} onClick={() => setScanning(true)} aria-label="Scan with camera">
+            <Scan className="size-4" />
+            <span className="hidden sm:inline">Scan</span>
+          </button>
           <button className={btnPrimary} onClick={() => add()}>
             Add item
           </button>
@@ -209,7 +278,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               >
                 <strong className="text-[13px] font-semibold">{p.name}</strong>
                 <span className="font-mono text-[11px] text-muted-foreground">
-                  {p.sku} · {money(p.sell)}
+                  {p.barcode} · {money(p.sell)}
                 </span>
                 <span className="text-[11px] text-muted-foreground">
                   {p.qty > 0 ? `${p.qty} in stock` : "Out of stock"}
@@ -285,7 +354,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
             <button
               key={method}
               onClick={() => setPay(method)}
-              className={cn(btn, pay === method && "border-primary bg-primary text-primary-foreground")}
+              className={cn(
+                btn,
+                pay === method && "border-primary bg-primary text-primary-foreground",
+              )}
             >
               {method}
             </button>
@@ -308,6 +380,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
             });
             setCart([]);
+            focusInput();
           }}
         >
           Complete sale
@@ -317,6 +390,8 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
           method.
         </p>
       </Panel>
+
+      <BarcodeScanner open={scanning} onClose={() => setScanning(false)} onScan={scan} />
     </div>
   );
 }
@@ -419,16 +494,24 @@ export function InventorySection({ shop }: { shop: BranchId }) {
           <table className="w-full min-w-[820px] border-collapse text-[13px]">
             <thead>
               <tr>
-                {["Product", "Branch", "Barcode", "Buying", "Selling", "Qty", "Min", "Status", ""].map(
-                  (h) => (
-                    <th
-                      key={h}
-                      className="border-b border-border px-2.5 pb-2.5 text-left text-[12px] font-medium text-muted-foreground"
-                    >
-                      {h}
-                    </th>
-                  ),
-                )}
+                {[
+                  "Product",
+                  "Branch",
+                  "Barcode",
+                  "Buying",
+                  "Selling",
+                  "Qty",
+                  "Min",
+                  "Status",
+                  "",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="border-b border-border px-2.5 pb-2.5 text-left text-[12px] font-medium text-muted-foreground"
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -719,7 +802,9 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
         <PanelHead title="Categories" description="Used when recording an expense." />
         <div className="flex flex-wrap gap-2">
           {expenseCategories.map((category) => {
-            const sum = rows.filter((e) => e.category === category).reduce((s, e) => s + e.amount, 0);
+            const sum = rows
+              .filter((e) => e.category === category)
+              .reduce((s, e) => s + e.amount, 0);
             return (
               <span
                 key={category}
@@ -1023,7 +1108,11 @@ export function ReportsSection() {
       />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {reports.map((report) => (
-          <button key={report.title} className="text-left" onClick={() => setOpenReport(report.title)}>
+          <button
+            key={report.title}
+            className="text-left"
+            onClick={() => setOpenReport(report.title)}
+          >
             <MiniCard title={report.title} copy={report.copy} />
           </button>
         ))}
@@ -1033,7 +1122,9 @@ export function ReportsSection() {
         <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{openReport}</DialogTitle>
-            <DialogDescription>Generated from recorded sales, stock and expenses.</DialogDescription>
+            <DialogDescription>
+              Generated from recorded sales, stock and expenses.
+            </DialogDescription>
           </DialogHeader>
           {rows.length ? (
             <div className="grid gap-2">
