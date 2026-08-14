@@ -30,7 +30,7 @@ export type Product = {
   sku: string;
   barcode: string;
   name: string;
-  branch: string;
+  branch: BranchId;
   category: string;
   buy: number;
   sell: number;
@@ -46,7 +46,7 @@ export const activities: Activity[] = [];
 
 export type Expense = {
   date: string;
-  branch: string;
+  branch: BranchId;
   category: string;
   description: string;
   amount: number;
@@ -65,7 +65,7 @@ export const expenseCategories = [
   "Other",
 ];
 
-export type Staff = { role: "Owner" | "Cashier"; name: string; branch: string; detail: string };
+export type Staff = { role: "Owner" | "Cashier"; name: string; branch: BranchId; detail: string };
 
 export const staff: Staff[] = [];
 
