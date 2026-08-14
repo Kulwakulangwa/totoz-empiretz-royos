@@ -12,6 +12,7 @@ import {
   StaffSection,
 } from "@/components/toto/sections";
 import { branches, money, navItems, type BranchId, type SectionId } from "@/lib/toto-data";
+import { TotoStoreProvider, useToto } from "@/lib/toto-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  component: Index,
+  component: IndexRoute,
 });
 
 const btn =
@@ -38,11 +39,20 @@ const btn =
 const btnPrimary =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90";
 
+function IndexRoute() {
+  return (
+    <TotoStoreProvider>
+      <Index />
+    </TotoStoreProvider>
+  );
+}
+
 function Index() {
   const [role, setRole] = useState<"Owner" | "Cashier">("Owner");
   const [shop, setShop] = useState<BranchId>("all");
   const [section, setSection] = useState<SectionId>("overview");
   const isOwner = role === "Owner";
+  const { sales, expenses, products } = useToto();
 
   const data = branches.find((b) => b.id === shop)!;
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
@@ -58,11 +68,38 @@ function Index() {
     }
   }
 
+  const today = new Date().toISOString().slice(0, 10);
+  const inScope = <T extends { branch: BranchId }>(rows: T[]) =>
+    rows.filter((r) => shop === "all" || r.branch === shop);
+
+  const todaySales = inScope(sales).filter((s) => s.date === today);
+  const todayExpenses = inScope(expenses).filter((e) => e.date === today);
+  const salesTotal = todaySales.reduce((sum, s) => sum + s.total, 0);
+  const salesCost = todaySales.reduce((sum, s) => sum + s.cost, 0);
+  const expenseTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const lowStock = inScope(products).filter((p) => p.qty <= p.min);
+
   const metrics = [
-    { label: "Sales today", value: money(0), note: "No sales recorded yet" },
-    { label: "Expenses today", value: money(0), note: "No expenses recorded yet" },
-    { label: "Gross profit", value: money(0), note: "Calculated from sales and expenses" },
-    { label: "Low stock items", value: "0", note: "Products at or below minimum" },
+    {
+      label: "Sales today",
+      value: money(salesTotal),
+      note: todaySales.length ? `${todaySales.length} receipts` : "No sales recorded yet",
+    },
+    {
+      label: "Expenses today",
+      value: money(expenseTotal),
+      note: todayExpenses.length ? `${todayExpenses.length} entries` : "No expenses recorded yet",
+    },
+    {
+      label: "Gross profit",
+      value: money(salesTotal - salesCost - expenseTotal),
+      note: "Sales minus cost of goods and expenses",
+    },
+    {
+      label: "Low stock items",
+      value: String(lowStock.length),
+      note: "Products at or below minimum",
+    },
   ];
 
   return (
@@ -108,7 +145,23 @@ function Index() {
               ))}
             </div>
             {isOwner && (
-              <button className={btn} onClick={() => toast("No data available to export yet.")}>
+              <button className={btn} onClick={() => {
+                  if (!sales.length) {
+                    toast("No sales recorded yet to export.");
+                    return;
+                  }
+                  const header = "receipt,date,branch,cashier,payment,total\n";
+                  const body = sales
+                    .map((s) => [s.receipt, s.date, s.branch, s.cashier, s.payment, s.total].join(","))
+                    .join("\n");
+                  const url = URL.createObjectURL(new Blob([header + body], { type: "text/csv" }));
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "toto-sales.csv";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast("Sales report exported");
+                }}>
                 Export report
               </button>
             )}
