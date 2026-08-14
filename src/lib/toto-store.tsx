@@ -134,14 +134,13 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     [state.products],
   );
 
-  const recordSale = useCallback<Ctx["recordSale"]>((input) => {
-    const total = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
-    const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
-    let created: Sale;
-    setState((prev) => {
-      created = {
+  const recordSale = useCallback<Ctx["recordSale"]>(
+    (input) => {
+      const total = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
+      const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
+      const sale: Sale = {
         id: `${Date.now()}`,
-        receipt: prev.receipt,
+        receipt: state.receipt,
         date: today(),
         branch: input.branch,
         cashier: input.cashier,
@@ -150,27 +149,20 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         total,
         cost,
       };
-      const products = prev.products.map((p) => {
-        const line = input.lines.find((l) => l.sku === p.sku);
-        return line ? { ...p, qty: Math.max(0, p.qty - line.qty) } : p;
+      setState((prev) => {
+        const products = prev.products.map((p) => {
+          const line = input.lines.find((l) => l.sku === p.sku);
+          return line ? { ...p, qty: Math.max(0, p.qty - line.qty) } : p;
+        });
+        return log(
+          `Sale #${String(sale.receipt).padStart(4, "0")}`,
+          `${branchLabel(input.branch)} · ${input.cashier} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
+        )({ ...prev, products, sales: [sale, ...prev.sales], receipt: prev.receipt + 1 });
       });
-      return log(
-        `Sale #${String(created.receipt).padStart(4, "0")}`,
-        `${branchLabel(input.branch)} · ${input.cashier} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
-      )({ ...prev, products, sales: [created, ...prev.sales], receipt: prev.receipt + 1 });
-    });
-    return {
-      id: "pending",
-      receipt: state.receipt,
-      date: today(),
-      branch: input.branch,
-      cashier: input.cashier,
-      payment: input.payment,
-      lines: input.lines,
-      total,
-      cost,
-    };
-  }, [state.receipt]);
+      return sale;
+    },
+    [state.receipt],
+  );
 
   const addExpense = useCallback((e: Expense) => {
     setState((prev) =>
