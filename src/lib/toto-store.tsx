@@ -143,7 +143,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setState({ ...EMPTY, ...JSON.parse(raw) });
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<State>;
+        setState({
+          ...EMPTY,
+          ...parsed,
+          settings: { ...defaultTaxSettings, ...(parsed.settings ?? {}) },
+        });
+      }
     } catch {
       /* ignore */
     }
