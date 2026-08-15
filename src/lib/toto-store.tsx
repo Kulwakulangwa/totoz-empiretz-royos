@@ -247,6 +247,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         lines: input.lines,
         total,
         cost,
+        vat: vatOf(total, state.settings),
       };
       setState((prev) => {
         const products = prev.products.map((p) => {
@@ -260,8 +261,67 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       });
       return sale;
     },
-    [state.receipt],
+    [state.receipt, state.settings],
   );
+
+  const recordReturn = useCallback<Ctx["recordReturn"]>(
+    (input) => {
+      const sale = state.sales.find((s) => s.id === input.saleId);
+      if (!sale) return undefined;
+      const lines = input.lines.filter((l) => l.qty > 0);
+      if (!lines.length) return undefined;
+      const total = lines.reduce((s, l) => s + l.sell * l.qty, 0);
+      const cost = lines.reduce((s, l) => s + l.buy * l.qty, 0);
+      const entry: SaleReturn = {
+        id: `r${Date.now()}`,
+        saleId: sale.id,
+        receipt: sale.receipt,
+        creditNote: state.creditNote,
+        date: today(),
+        branch: sale.branch,
+        cashier: input.cashier,
+        reason: input.reason,
+        lines,
+        total,
+        cost,
+        vat: vatOf(total, state.settings),
+        restock: input.restock,
+      };
+      const returnedQty = lines.reduce((s, l) => s + l.qty, 0);
+      setState((prev) => {
+        const products = input.restock
+          ? prev.products.map((p) => {
+              const line = lines.find((l) => l.sku === p.sku && sale.branch === p.branch);
+              return line ? { ...p, qty: p.qty + line.qty } : p;
+            })
+          : prev.products;
+        const sales = prev.sales.map((s) =>
+          s.id === sale.id ? { ...s, returned: (s.returned ?? 0) + returnedQty } : s,
+        );
+        return log(
+          `Return CN-${String(entry.creditNote).padStart(4, "0")}`,
+          `Receipt #${String(sale.receipt).padStart(4, "0")} · ${branchLabel(sale.branch)} · ${returnedQty} item(s) · TZS ${total.toLocaleString("en-US")}${input.restock ? " · restocked" : " · not restocked"}`,
+        )({
+          ...prev,
+          products,
+          sales,
+          returns: [entry, ...prev.returns],
+          creditNote: prev.creditNote + 1,
+        });
+      });
+      return entry;
+    },
+    [state.sales, state.creditNote, state.settings],
+  );
+
+  const updateSettings = useCallback((patch: Partial<TaxSettings>) => {
+    setState((prev) =>
+      log(
+        "Tax settings updated",
+        "VAT / EFD receipt details changed",
+      )({ ...prev, settings: { ...prev.settings, ...patch } }),
+    );
+  }, []);
 
   const addExpense = useCallback((e: Expense) => {
     setState((prev) =>
@@ -303,6 +363,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       adjustStock,
       findByCode,
       recordSale,
+      recordReturn,
+      updateSettings,
       addExpense,
       removeExpense,
       addStaff,
@@ -317,6 +379,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       adjustStock,
       findByCode,
       recordSale,
+      recordReturn,
+      updateSettings,
       addExpense,
       removeExpense,
       addStaff,
