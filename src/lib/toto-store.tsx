@@ -27,24 +27,78 @@ export type Sale = {
   lines: SaleLine[];
   total: number;
   cost: number;
+  vat: number;
+  returned?: number;
 };
+
+export type SaleReturn = {
+  id: string;
+  saleId: string;
+  receipt: number;
+  creditNote: number;
+  date: string;
+  branch: BranchId;
+  cashier: string;
+  reason: string;
+  lines: SaleLine[];
+  total: number;
+  cost: number;
+  vat: number;
+  restock: boolean;
+};
+
+export type TaxSettings = {
+  businessName: string;
+  address: string;
+  phone: string;
+  tin: string;
+  vrn: string;
+  efdSerial: string;
+  vatEnabled: boolean;
+  vatRate: number;
+  receiptFooter: string;
+};
+
+export const defaultTaxSettings: TaxSettings = {
+  businessName: "Toto Empire",
+  address: "Dar es Salaam, Tanzania",
+  phone: "",
+  tin: "",
+  vrn: "",
+  efdSerial: "",
+  vatEnabled: true,
+  vatRate: 18,
+  receiptFooter: "Thank you for shopping with Toto Empire",
+};
+
+/** Prices are VAT inclusive (TRA practice). Returns the VAT portion of a gross amount. */
+export const vatOf = (gross: number, settings: TaxSettings) =>
+  settings.vatEnabled && settings.vatRate > 0
+    ? Math.round(gross - gross / (1 + settings.vatRate / 100))
+    : 0;
 
 type State = {
   products: Product[];
   sales: Sale[];
+  returns: SaleReturn[];
   expenses: Expense[];
   staff: Staff[];
   activities: Activity[];
   receipt: number;
+  creditNote: number;
+  settings: TaxSettings;
 };
 
 const EMPTY: State = {
   products: [],
   sales: [],
+  returns: [],
   expenses: [],
   staff: [],
   activities: [],
   receipt: 1,
+  creditNote: 1,
+  settings: defaultTaxSettings,
 };
 const KEY = "toto-empire-state-v1";
 
@@ -60,6 +114,14 @@ type Ctx = State & {
     payment: "Cash" | "Lipa Namba";
     lines: SaleLine[];
   }) => Sale;
+  recordReturn: (input: {
+    saleId: string;
+    cashier: string;
+    reason: string;
+    restock: boolean;
+    lines: SaleLine[];
+  }) => SaleReturn | undefined;
+  updateSettings: (patch: Partial<TaxSettings>) => void;
   addExpense: (e: Expense) => void;
   removeExpense: (index: number) => void;
   addStaff: (s: Staff) => void;
@@ -81,7 +143,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setState({ ...EMPTY, ...JSON.parse(raw) });
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<State>;
+        setState({
+          ...EMPTY,
+          ...parsed,
+          settings: { ...defaultTaxSettings, ...(parsed.settings ?? {}) },
+        });
+      }
     } catch {
       /* ignore */
     }
@@ -185,6 +254,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         lines: input.lines,
         total,
         cost,
+        vat: vatOf(total, state.settings),
       };
       setState((prev) => {
         const products = prev.products.map((p) => {
@@ -198,8 +268,67 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       });
       return sale;
     },
-    [state.receipt],
+    [state.receipt, state.settings],
   );
+
+  const recordReturn = useCallback<Ctx["recordReturn"]>(
+    (input) => {
+      const sale = state.sales.find((s) => s.id === input.saleId);
+      if (!sale) return undefined;
+      const lines = input.lines.filter((l) => l.qty > 0);
+      if (!lines.length) return undefined;
+      const total = lines.reduce((s, l) => s + l.sell * l.qty, 0);
+      const cost = lines.reduce((s, l) => s + l.buy * l.qty, 0);
+      const entry: SaleReturn = {
+        id: `r${Date.now()}`,
+        saleId: sale.id,
+        receipt: sale.receipt,
+        creditNote: state.creditNote,
+        date: today(),
+        branch: sale.branch,
+        cashier: input.cashier,
+        reason: input.reason,
+        lines,
+        total,
+        cost,
+        vat: vatOf(total, state.settings),
+        restock: input.restock,
+      };
+      const returnedQty = lines.reduce((s, l) => s + l.qty, 0);
+      setState((prev) => {
+        const products = input.restock
+          ? prev.products.map((p) => {
+              const line = lines.find((l) => l.sku === p.sku && sale.branch === p.branch);
+              return line ? { ...p, qty: p.qty + line.qty } : p;
+            })
+          : prev.products;
+        const sales = prev.sales.map((s) =>
+          s.id === sale.id ? { ...s, returned: (s.returned ?? 0) + returnedQty } : s,
+        );
+        return log(
+          `Return CN-${String(entry.creditNote).padStart(4, "0")}`,
+          `Receipt #${String(sale.receipt).padStart(4, "0")} · ${branchLabel(sale.branch)} · ${returnedQty} item(s) · TZS ${total.toLocaleString("en-US")}${input.restock ? " · restocked" : " · not restocked"}`,
+        )({
+          ...prev,
+          products,
+          sales,
+          returns: [entry, ...prev.returns],
+          creditNote: prev.creditNote + 1,
+        });
+      });
+      return entry;
+    },
+    [state.sales, state.creditNote, state.settings],
+  );
+
+  const updateSettings = useCallback((patch: Partial<TaxSettings>) => {
+    setState((prev) =>
+      log(
+        "Tax settings updated",
+        "VAT / EFD receipt details changed",
+      )({ ...prev, settings: { ...prev.settings, ...patch } }),
+    );
+  }, []);
 
   const addExpense = useCallback((e: Expense) => {
     setState((prev) =>
@@ -241,6 +370,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       adjustStock,
       findByCode,
       recordSale,
+      recordReturn,
+      updateSettings,
       addExpense,
       removeExpense,
       addStaff,
@@ -255,6 +386,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       adjustStock,
       findByCode,
       recordSale,
+      recordReturn,
+      updateSettings,
       addExpense,
       removeExpense,
       addStaff,

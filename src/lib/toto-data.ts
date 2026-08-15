@@ -15,15 +15,25 @@ export const branches: Branch[] = [
   { id: "jewellery", name: "Jewellery", sub: "Local jewellery" },
 ];
 
-export type SectionId = "overview" | "pos" | "inventory" | "expenses" | "staff" | "reports";
+export type SectionId =
+  | "overview"
+  | "pos"
+  | "inventory"
+  | "returns"
+  | "expenses"
+  | "staff"
+  | "reports"
+  | "settings";
 
 export const navItems: { id: SectionId; label: string; ownerOnly: boolean }[] = [
   { id: "overview", label: "Overview", ownerOnly: true },
   { id: "pos", label: "Point of sale", ownerOnly: false },
+  { id: "returns", label: "Returns", ownerOnly: false },
   { id: "inventory", label: "Inventory", ownerOnly: true },
   { id: "expenses", label: "Expenses", ownerOnly: true },
   { id: "staff", label: "Staff", ownerOnly: true },
   { id: "reports", label: "Reports", ownerOnly: true },
+  { id: "settings", label: "VAT / EFD", ownerOnly: true },
 ];
 
 export type Product = {
@@ -89,6 +99,14 @@ export const reports = [
   {
     title: "Audit history",
     copy: "Sales, price edits, stock adjustments, expenses and user changes.",
+  },
+  {
+    title: "VAT report",
+    copy: "Output VAT collected on sales, less VAT credited on returns.",
+  },
+  {
+    title: "Returns report",
+    copy: "Credit notes issued, value returned and reasons by shop.",
   },
 ];
 
