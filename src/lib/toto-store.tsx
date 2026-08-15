@@ -27,24 +27,78 @@ export type Sale = {
   lines: SaleLine[];
   total: number;
   cost: number;
+  vat: number;
+  returned?: number;
 };
+
+export type SaleReturn = {
+  id: string;
+  saleId: string;
+  receipt: number;
+  creditNote: number;
+  date: string;
+  branch: BranchId;
+  cashier: string;
+  reason: string;
+  lines: SaleLine[];
+  total: number;
+  cost: number;
+  vat: number;
+  restock: boolean;
+};
+
+export type TaxSettings = {
+  businessName: string;
+  address: string;
+  phone: string;
+  tin: string;
+  vrn: string;
+  efdSerial: string;
+  vatEnabled: boolean;
+  vatRate: number;
+  receiptFooter: string;
+};
+
+export const defaultTaxSettings: TaxSettings = {
+  businessName: "Toto Empire",
+  address: "Dar es Salaam, Tanzania",
+  phone: "",
+  tin: "",
+  vrn: "",
+  efdSerial: "",
+  vatEnabled: true,
+  vatRate: 18,
+  receiptFooter: "Thank you for shopping with Toto Empire",
+};
+
+/** Prices are VAT inclusive (TRA practice). Returns the VAT portion of a gross amount. */
+export const vatOf = (gross: number, settings: TaxSettings) =>
+  settings.vatEnabled && settings.vatRate > 0
+    ? Math.round(gross - gross / (1 + settings.vatRate / 100))
+    : 0;
 
 type State = {
   products: Product[];
   sales: Sale[];
+  returns: SaleReturn[];
   expenses: Expense[];
   staff: Staff[];
   activities: Activity[];
   receipt: number;
+  creditNote: number;
+  settings: TaxSettings;
 };
 
 const EMPTY: State = {
   products: [],
   sales: [],
+  returns: [],
   expenses: [],
   staff: [],
   activities: [],
   receipt: 1,
+  creditNote: 1,
+  settings: defaultTaxSettings,
 };
 const KEY = "toto-empire-state-v1";
 
@@ -60,6 +114,14 @@ type Ctx = State & {
     payment: "Cash" | "Lipa Namba";
     lines: SaleLine[];
   }) => Sale;
+  recordReturn: (input: {
+    saleId: string;
+    cashier: string;
+    reason: string;
+    restock: boolean;
+    lines: SaleLine[];
+  }) => SaleReturn | undefined;
+  updateSettings: (patch: Partial<TaxSettings>) => void;
   addExpense: (e: Expense) => void;
   removeExpense: (index: number) => void;
   addStaff: (s: Staff) => void;
