@@ -124,7 +124,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const [scanning, setScanning] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const activeBranch: BranchId = shop === "all" ? "kariakoo" : shop;
+  const activeBranch: BranchId = shop === "all" ? "toto" : shop;
   const assigned = branchLabel(activeBranch);
   const available = useMemo(
     () => products.filter((p) => p.branch === activeBranch),
@@ -402,7 +402,7 @@ const emptyProduct = {
   name: "",
   sku: "",
   barcode: "",
-  branch: "kariakoo" as BranchId,
+  branch: "toto" as BranchId,
   category: "",
   buy: "",
   sell: "",
@@ -421,7 +421,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
 
   function openNew() {
     setEditing(null);
-    setForm({ ...emptyProduct, branch: shop === "all" ? "kariakoo" : shop });
+    setForm({ ...emptyProduct, branch: shop === "all" ? "toto" : shop });
     setOpen(true);
   }
 
@@ -733,7 +733,7 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
-    branch: (shop === "all" ? "kariakoo" : shop) as BranchId,
+    branch: (shop === "all" ? "toto" : shop) as BranchId,
     category: expenseCategories[0] ?? "Other",
     description: "",
     amount: "",
@@ -920,7 +920,7 @@ export function StaffSection() {
   const [form, setForm] = useState({
     name: "",
     role: "Cashier" as "Owner" | "Cashier",
-    branch: "kariakoo" as BranchId,
+    branch: "toto" as BranchId,
     detail: "",
   });
 

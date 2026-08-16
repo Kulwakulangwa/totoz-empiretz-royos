@@ -40,7 +40,7 @@ function DashboardInner() {
   const [section, setSection] = useState<SectionId>("pos");
   const { sales, returns, expenses, products } = useToto();
 
-  const effectiveShop: BranchId = isOwner ? shop : shop === "all" ? "kariakoo" : shop;
+  const effectiveShop: BranchId = isOwner ? shop : shop === "all" ? "toto" : shop;
   const data = branches.find((b) => b.id === effectiveShop)!;
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
   const activeSection: SectionId =

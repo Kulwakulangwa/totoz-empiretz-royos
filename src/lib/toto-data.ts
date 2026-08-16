@@ -1,4 +1,4 @@
-export type BranchId = "all" | "kariakoo" | "mlimani" | "sinza" | "tegeta" | "jewellery";
+export type BranchId = "all" | "toto" | "sunnozy1" | "sunnozy2" | "mimis" | "marc";
 
 export type Branch = {
   id: BranchId;
@@ -8,11 +8,11 @@ export type Branch = {
 
 export const branches: Branch[] = [
   { id: "all", name: "All shops", sub: "Consolidated view" },
-  { id: "kariakoo", name: "Kariakoo", sub: "Baby and kids" },
-  { id: "mlimani", name: "Mlimani", sub: "Toys and clothes" },
-  { id: "sinza", name: "Sinza", sub: "Baby products" },
-  { id: "tegeta", name: "Tegeta", sub: "Clothes and toys" },
-  { id: "jewellery", name: "Jewellery", sub: "Local jewellery" },
+  { id: "toto", name: "Totoz Empire", sub: "Baby and kids" },
+  { id: "sunnozy1", name: "Sunnozy-1", sub: "Toys and clothes" },
+  { id: "sunnozy2", name: "Sunnozy-2", sub: "Baby products" },
+  { id: "mimis", name: "Mimis", sub: "Clothes and toys" },
+  { id: "marc", name: "Marc Urembo", sub: "Jewellery shop" },
 ];
 
 export type SectionId =
