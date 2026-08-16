@@ -123,8 +123,7 @@ function AuthPage() {
           </button>
         </div>
         <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground">
-          The first account created becomes the Owner. Every account after that starts as a Cashier
-          limited to the point of sale.
+          Accounts are created by the owner. Contact the owner if you need access.
         </p>
       </div>
     </main>
