@@ -1103,9 +1103,7 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
       { label: "VAT credited on returns", value: money(returns.reduce((a, x) => a + x.vat, 0)) },
       {
         label: "Net VAT payable",
-        value: money(
-          sales.reduce((a, x) => a + x.vat, 0) - returns.reduce((a, x) => a + x.vat, 0),
-        ),
+        value: money(sales.reduce((a, x) => a + x.vat, 0) - returns.reduce((a, x) => a + x.vat, 0)),
       },
     ],
     "Returns report": returns.map((r) => ({
@@ -1169,7 +1167,6 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
   );
 }
 
-
 /* ---------------- Returns ---------------- */
 
 export function ReturnsSection({
@@ -1191,7 +1188,8 @@ export function ReturnsSection({
   const scoped = sales.filter((s) => shop === "all" || s.branch === shop);
   const q = query.trim().toLowerCase();
   const matches = scoped.filter(
-    (s) => !q || String(s.receipt).padStart(4, "0").includes(q) || s.cashier.toLowerCase().includes(q),
+    (s) =>
+      !q || String(s.receipt).padStart(4, "0").includes(q) || s.cashier.toLowerCase().includes(q),
   );
   const sale = sales.find((s) => s.id === openId) ?? null;
 
@@ -1336,11 +1334,7 @@ export function ReturnsSection({
               </div>
             ))}
             <Field label="Reason">
-              <input
-                className={field}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
+              <input className={field} value={reason} onChange={(e) => setReason(e.target.value)} />
             </Field>
             <label className="flex items-center gap-2 text-[13px]">
               <input
@@ -1402,10 +1396,18 @@ export function SettingsSection() {
           />
         </Field>
         <Field label="TIN">
-          <input className={field} value={form.tin} onChange={(e) => set({ tin: e.target.value })} />
+          <input
+            className={field}
+            value={form.tin}
+            onChange={(e) => set({ tin: e.target.value })}
+          />
         </Field>
         <Field label="VRN">
-          <input className={field} value={form.vrn} onChange={(e) => set({ vrn: e.target.value })} />
+          <input
+            className={field}
+            value={form.vrn}
+            onChange={(e) => set({ vrn: e.target.value })}
+          />
         </Field>
         <Field label="EFD serial">
           <input

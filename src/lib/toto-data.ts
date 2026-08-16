@@ -16,14 +16,7 @@ export const branches: Branch[] = [
 ];
 
 export type SectionId =
-  | "overview"
-  | "pos"
-  | "inventory"
-  | "returns"
-  | "expenses"
-  | "staff"
-  | "reports"
-  | "settings";
+  "overview" | "pos" | "inventory" | "returns" | "expenses" | "staff" | "reports" | "settings";
 
 export const navItems: { id: SectionId; label: string; ownerOnly: boolean }[] = [
   { id: "overview", label: "Overview", ownerOnly: true },
