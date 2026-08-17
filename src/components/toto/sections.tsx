@@ -1097,7 +1097,7 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
     rows.filter((r) => shop === "all" || r.branch === shop);
   const sales = scope(store.sales);
   const expenses = scope(store.expenses);
-  const products = scope(store.products);
+  const products = store.products;
   const returns = scope(store.returns);
   const [openReport, setOpenReport] = useState<string | null>(null);
 
@@ -1106,7 +1106,7 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
   const spend = expenses.reduce((s, x) => s + x.amount, 0);
   const cash = sales.filter((s) => s.payment === "Cash").reduce((s, x) => s + x.total, 0);
   const lipa = revenue - cash;
-  const lowStock = products.filter((p) => p.qty <= p.min);
+  const lowStock = products.filter((p) => stockOf(p, shop) <= p.min);
 
   const summaries: Record<string, { label: string; value: string }[]> = {
     "Sales report": [
@@ -1127,12 +1127,12 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
         }, {}),
     ).map(([name, qty]) => ({ label: name, value: `${qty} sold` })),
     "Inventory report": products.map((p) => ({
-      label: `${p.name} · ${branchLabel(p.branch)}`,
-      value: `${p.qty} in stock`,
+      label: `${p.name} · ${p.sku}`,
+      value: `${stockOf(p, shop)} in stock`,
     })),
     "Low-stock report": lowStock.map((p) => ({
-      label: `${p.name} · ${branchLabel(p.branch)}`,
-      value: `${p.qty} / min ${p.min}`,
+      label: `${p.name} · ${p.sku}`,
+      value: `${stockOf(p, shop)} / min ${p.min}`,
     })),
     "Expense report": Object.entries(
       expenses.reduce<Record<string, number>>((acc, e) => {

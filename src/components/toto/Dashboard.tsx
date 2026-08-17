@@ -62,7 +62,7 @@ function DashboardInner() {
   const expenseTotal = todayExpenses.reduce((sum, e) => sum + e.amount, 0);
   const vatTotal =
     todaySales.reduce((sum, s) => sum + s.vat, 0) - todayReturns.reduce((sum, r) => sum + r.vat, 0);
-  const lowStock = inScope(products).filter((p) => p.qty <= p.min);
+  const lowStock = products.filter((p) => stockOf(p, branch) <= p.min);
 
   const metrics = [
     {
