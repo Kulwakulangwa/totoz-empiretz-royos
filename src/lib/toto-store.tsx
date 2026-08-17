@@ -105,14 +105,33 @@ const EMPTY: State = {
   creditNote: 1,
   settings: defaultTaxSettings,
 };
-const KEY = "toto-empire-state-v1";
+const KEY = "toto-empire-state-v2";
+const LEGACY_KEY = "toto-empire-state-v1";
+
+export type ProductInput = {
+  name: string;
+  sku: string;
+  /** Blank means "generate an internal barcode". */
+  barcode: string;
+  category: string;
+  buy: number;
+  sell: number;
+  min: number;
+  stock: Partial<Record<ShopId, number>>;
+};
+
+export type SaveResult = { ok: true; product: Product } | { ok: false; error: string };
 
 type Ctx = State & {
-  addProduct: (p: Product) => void;
-  updateProduct: (sku: string, patch: Partial<Product>) => void;
+  addProduct: (input: ProductInput) => SaveResult;
+  updateProduct: (sku: string, input: ProductInput) => SaveResult;
   removeProduct: (sku: string) => void;
-  adjustStock: (sku: string, delta: number, reason: string) => void;
+  adjustStock: (sku: string, branch: ShopId, delta: number, reason: string) => void;
   findByCode: (code: string, branch: BranchId) => Product | undefined;
+  /** Next free internal barcode, safe against everything currently stored. */
+  nextBarcode: () => string;
+  /** Suggested unique SKU following the existing PREFIX-0001 convention. */
+  suggestSku: (name: string) => string;
   recordSale: (input: {
     branch: BranchId;
     cashier: string;
@@ -141,20 +160,160 @@ const timeLabel = () =>
   new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
+const norm = (v: string) => v.trim().toLowerCase();
+
+/* ---------- barcode / sku helpers (pure) ---------- */
+
+function nextInternalBarcode(products: Product[]): string {
+  const used = new Set(products.map((p) => p.barcode));
+  let candidate = INTERNAL_BARCODE_START;
+  for (const p of products) {
+    const n = Number(p.barcode);
+    if (Number.isSafeInteger(n) && n >= INTERNAL_BARCODE_START && n >= candidate) {
+      candidate = n + 1;
+    }
+  }
+  // Never hand out a value that already exists, even after manual edits.
+  while (used.has(String(candidate))) candidate += 1;
+  return String(candidate);
+}
+
+function skuPrefix(name: string) {
+  const words = name
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const letters = words.map((w) => w[0]).join("");
+  return (letters || "SKU").slice(0, 3).padEnd(2, "X");
+}
+
+function nextSku(products: Product[], name: string): string {
+  const prefix = skuPrefix(name);
+  const used = new Set(products.map((p) => norm(p.sku)));
+  let n = 1;
+  let candidate = `${prefix}-${String(n).padStart(4, "0")}`;
+  while (used.has(norm(candidate))) {
+    n += 1;
+    candidate = `${prefix}-${String(n).padStart(4, "0")}`;
+  }
+  return candidate;
+}
+
+const cleanStock = (stock: Partial<Record<ShopId, number>>) => {
+  const out: Partial<Record<ShopId, number>> = {};
+  for (const id of shopIds) {
+    const value = Math.max(0, Math.round(Number(stock[id]) || 0));
+    if (value > 0) out[id] = value;
+  }
+  return out;
+};
+
+/* ---------- legacy migration: per-branch rows -> one global product ---------- */
+
+type LegacyProduct = Product & { branch?: BranchId; qty?: number };
+
+function migrateProducts(rows: LegacyProduct[]): { products: Product[]; notes: string[] } {
+  const products: Product[] = [];
+  const notes: string[] = [];
+  const byBarcode = new Map<string, Product>();
+  const bySku = new Map<string, Product>();
+
+  for (const row of rows) {
+    if (row.stock && !row.branch) {
+      // already migrated
+      const existing = byBarcode.get(norm(row.barcode)) ?? bySku.get(norm(row.sku));
+      if (existing) {
+        notes.push(`Duplicate identity merged: ${row.name} (${row.sku})`);
+        for (const id of shopIds) {
+          const add = row.stock[id] ?? 0;
+          if (add) existing.stock[id] = (existing.stock[id] ?? 0) + add;
+        }
+        continue;
+      }
+      const p: Product = { ...row, stock: cleanStock(row.stock) };
+      products.push(p);
+      byBarcode.set(norm(p.barcode), p);
+      bySku.set(norm(p.sku), p);
+      continue;
+    }
+
+    const branch = (row.branch && row.branch !== "all" ? row.branch : "toto") as ShopId;
+    const qty = Math.max(0, Math.round(Number(row.qty) || 0));
+    const key = norm(row.barcode);
+    const match = byBarcode.get(key);
+
+    if (match) {
+      // Same barcode: same global product in another shop -> merge stock.
+      match.stock[branch] = (match.stock[branch] ?? 0) + qty;
+      notes.push(`${row.name} merged into one product (${match.sku}) with per-shop stock`);
+      continue;
+    }
+
+    let sku = row.sku;
+    if (bySku.has(norm(sku))) {
+      sku = nextSku(products, row.name);
+      notes.push(`Duplicate SKU ${row.sku} on "${row.name}" renamed to ${sku}`);
+    }
+
+    const p: Product = {
+      name: row.name,
+      sku,
+      barcode: row.barcode,
+      category: row.category,
+      buy: row.buy,
+      sell: row.sell,
+      min: row.min,
+      stock: qty ? { [branch]: qty } : {},
+    };
+    products.push(p);
+    byBarcode.set(norm(p.barcode), p);
+    bySku.set(norm(p.sku), p);
+  }
+
+  return { products, notes };
+}
+
 export function TotoStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(EMPTY);
   const [hydrated, setHydrated] = useState(false);
+  // Mirrors the latest committed state so uniqueness checks and barcode
+  // generation always read fresh data, even for back-to-back writes.
+  const ref = useRef<State>(EMPTY);
+
+  const commit = useCallback((updater: (prev: State) => State) => {
+    const next = updater(ref.current);
+    ref.current = next;
+    setState(next);
+    return next;
+  }, []);
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(KEY);
+      const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<State>;
-        setState({
+        const { products, notes } = migrateProducts(
+          (parsed.products ?? []) as LegacyProduct[],
+        );
+        const migrated: State = {
           ...EMPTY,
           ...parsed,
+          products,
           settings: { ...defaultTaxSettings, ...(parsed.settings ?? {}) },
-        });
+        };
+        if (notes.length) {
+          migrated.activities = [
+            {
+              title: "Product identities consolidated",
+              desc: notes.slice(0, 6).join(" · "),
+              time: `${today()} ${timeLabel()}`,
+            },
+            ...migrated.activities,
+          ];
+        }
+        ref.current = migrated;
+        setState(migrated);
       }
     } catch {
       /* ignore */
@@ -181,66 +340,115 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       ),
     });
 
-  const addProduct = useCallback((p: Product) => {
-    setState((prev) => {
-      const next = log(
-        "Product added",
-        `${p.name} · ${p.branch} · ${p.qty} in stock`,
-      )({
-        ...prev,
-        products: [...prev.products.filter((x) => x.sku !== p.sku), p],
-      });
-      return next;
-    });
-  }, []);
+  const stockSummary = (stock: Partial<Record<ShopId, number>>) =>
+    shopIds
+      .filter((id) => (stock[id] ?? 0) > 0)
+      .map((id) => `${branchLabel(id)} ${stock[id]}`)
+      .join(", ") || "no stock yet";
 
-  const updateProduct = useCallback((sku: string, patch: Partial<Product>) => {
-    setState((prev) => {
-      const target = prev.products.find((p) => p.sku === sku);
-      const products = prev.products.map((p) => (p.sku === sku ? { ...p, ...patch } : p));
-      return log(
-        "Product updated",
-        `${target?.name ?? sku} details changed`,
-      )({ ...prev, products });
-    });
-  }, []);
+  const nextBarcode = useCallback(() => nextInternalBarcode(ref.current.products), []);
+  const suggestSku = useCallback((name: string) => nextSku(ref.current.products, name), []);
 
-  const removeProduct = useCallback((sku: string) => {
-    setState((prev) => {
-      const target = prev.products.find((p) => p.sku === sku);
-      return log(
-        "Product removed",
-        `${target?.name ?? sku} deleted from inventory`,
-      )({
-        ...prev,
-        products: prev.products.filter((p) => p.sku !== sku),
-      });
-    });
-  }, []);
+  const saveProduct = useCallback(
+    (input: ProductInput, editingSku: string | null): SaveResult => {
+      const name = input.name.trim();
+      if (!name) return { ok: false, error: "Product name is required." };
 
-  const adjustStock = useCallback((sku: string, delta: number, reason: string) => {
-    setState((prev) => {
-      const target = prev.products.find((p) => p.sku === sku);
-      if (!target) return prev;
-      const products = prev.products.map((p) =>
-        p.sku === sku ? { ...p, qty: Math.max(0, p.qty + delta) } : p,
+      const others = ref.current.products.filter((p) => p.sku !== editingSku);
+
+      const sku = input.sku.trim() || nextSku(ref.current.products, name);
+      if (others.some((p) => norm(p.sku) === norm(sku))) {
+        const owner = others.find((p) => norm(p.sku) === norm(sku))!;
+        return { ok: false, error: `This SKU is already assigned to ${owner.name}.` };
+      }
+
+      let barcode = input.barcode.trim();
+      if (!barcode) {
+        barcode = nextInternalBarcode(ref.current.products);
+      } else if (others.some((p) => norm(p.barcode) === norm(barcode))) {
+        return { ok: false, error: "This barcode is already assigned to another product." };
+      }
+      // Final safety net: if the generated value collided, take the next free one.
+      while (others.some((p) => norm(p.barcode) === norm(barcode))) {
+        barcode = nextInternalBarcode([...others, { ...EMPTY.products[0]! }].filter(Boolean));
+      }
+
+      const product: Product = {
+        name,
+        sku,
+        barcode,
+        category: input.category.trim() || "General",
+        buy: Number(input.buy) || 0,
+        sell: Number(input.sell) || 0,
+        min: Math.max(0, Number(input.min) || 0),
+        stock: cleanStock(input.stock),
+      };
+
+      commit((prev) =>
+        log(
+          editingSku ? "Product updated" : "Product added",
+          `${product.name} · ${product.sku} · ${product.barcode} · ${stockSummary(product.stock)}`,
+        )({
+          ...prev,
+          products: editingSku
+            ? prev.products.map((p) => (p.sku === editingSku ? product : p))
+            : [...prev.products, product],
+        }),
       );
-      return log(
-        "Stock adjusted",
-        `${target.name} ${delta > 0 ? "+" : ""}${delta} · ${reason}`,
-      )({ ...prev, products });
-    });
-  }, []);
+
+      return { ok: true, product };
+    },
+    [commit],
+  );
+
+  const addProduct = useCallback(
+    (input: ProductInput) => saveProduct(input, null),
+    [saveProduct],
+  );
+  const updateProduct = useCallback(
+    (sku: string, input: ProductInput) => saveProduct(input, sku),
+    [saveProduct],
+  );
+
+  const removeProduct = useCallback(
+    (sku: string) => {
+      commit((prev) => {
+        const target = prev.products.find((p) => p.sku === sku);
+        return log(
+          "Product removed",
+          `${target?.name ?? sku} deleted from inventory`,
+        )({ ...prev, products: prev.products.filter((p) => p.sku !== sku) });
+      });
+    },
+    [commit],
+  );
+
+  const adjustStock = useCallback(
+    (sku: string, branch: ShopId, delta: number, reason: string) => {
+      commit((prev) => {
+        const target = prev.products.find((p) => p.sku === sku);
+        if (!target) return prev;
+        const products = prev.products.map((p) =>
+          p.sku === sku
+            ? { ...p, stock: { ...p.stock, [branch]: Math.max(0, (p.stock[branch] ?? 0) + delta) } }
+            : p,
+        );
+        return log(
+          "Stock adjusted",
+          `${target.name} · ${branchLabel(branch)} ${delta > 0 ? "+" : ""}${delta} · ${reason}`,
+        )({ ...prev, products });
+      });
+    },
+    [commit],
+  );
 
   const findByCode = useCallback(
     (code: string, branch: BranchId) => {
-      const q = code.trim().toLowerCase();
+      const q = norm(code);
       if (!q) return undefined;
-      return state.products.find(
-        (p) =>
-          (branch === "all" || p.branch === branch) &&
-          (p.barcode.toLowerCase() === q || p.sku.toLowerCase() === q),
-      );
+      const match = state.products.find((p) => norm(p.barcode) === q || norm(p.sku) === q);
+      if (!match) return undefined;
+      return branch === "all" || stockOf(match, branch) >= 0 ? match : undefined;
     },
     [state.products],
   );
@@ -249,62 +457,68 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     (input) => {
       const total = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
       const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
+      const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
       const sale: Sale = {
         id: `${Date.now()}`,
-        receipt: state.receipt,
+        receipt: ref.current.receipt,
         date: today(),
-        branch: input.branch,
+        branch,
         cashier: input.cashier,
         payment: input.payment,
         lines: input.lines,
         total,
         cost,
-        vat: vatOf(total, state.settings),
+        vat: vatOf(total, ref.current.settings),
       };
-      setState((prev) => {
+      commit((prev) => {
         const products = prev.products.map((p) => {
           const line = input.lines.find((l) => l.sku === p.sku);
-          return line ? { ...p, qty: Math.max(0, p.qty - line.qty) } : p;
+          return line
+            ? { ...p, stock: { ...p.stock, [branch]: Math.max(0, (p.stock[branch] ?? 0) - line.qty) } }
+            : p;
         });
         return log(
           `Sale #${String(sale.receipt).padStart(4, "0")}`,
-          `${branchLabel(input.branch)} · ${input.cashier} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
+          `${branchLabel(branch)} · ${input.cashier} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
         )({ ...prev, products, sales: [sale, ...prev.sales], receipt: prev.receipt + 1 });
       });
       return sale;
     },
-    [state.receipt, state.settings],
+    [commit],
   );
 
   const recordReturn = useCallback<Ctx["recordReturn"]>(
     (input) => {
-      const sale = state.sales.find((s) => s.id === input.saleId);
+      const sale = ref.current.sales.find((s) => s.id === input.saleId);
       if (!sale) return undefined;
       const lines = input.lines.filter((l) => l.qty > 0);
       if (!lines.length) return undefined;
       const total = lines.reduce((s, l) => s + l.sell * l.qty, 0);
       const cost = lines.reduce((s, l) => s + l.buy * l.qty, 0);
+      const branch: ShopId = sale.branch === "all" ? "toto" : sale.branch;
       const entry: SaleReturn = {
         id: `r${Date.now()}`,
         saleId: sale.id,
         receipt: sale.receipt,
-        creditNote: state.creditNote,
+        creditNote: ref.current.creditNote,
         date: today(),
-        branch: sale.branch,
+        branch,
         cashier: input.cashier,
         reason: input.reason,
         lines,
         total,
         cost,
-        vat: vatOf(total, state.settings),
+        vat: vatOf(total, ref.current.settings),
         restock: input.restock,
       };
       const returnedQty = lines.reduce((s, l) => s + l.qty, 0);
-      setState((prev) => {
+      commit((prev) => {
         const products = input.restock
           ? prev.products.map((p) => {
-              const line = lines.find((l) => l.sku === p.sku && sale.branch === p.branch);
-              return line ? { ...p, qty: p.qty + line.qty } : p;
+              const line = lines.find((l) => l.sku === p.sku);
+              return line
+                ? { ...p, stock: { ...p.stock, [branch]: (p.stock[branch] ?? 0) + line.qty } }
+                : p;
             })
           : prev.products;
         const sales = prev.sales.map((s) =>
@@ -312,7 +526,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         );
         return log(
           `Return CN-${String(entry.creditNote).padStart(4, "0")}`,
-          `Receipt #${String(sale.receipt).padStart(4, "0")} · ${branchLabel(sale.branch)} · ${returnedQty} item(s) · TZS ${total.toLocaleString("en-US")}${input.restock ? " · restocked" : " · not restocked"}`,
+          `Receipt #${String(sale.receipt).padStart(4, "0")} · ${branchLabel(branch)} · ${returnedQty} item(s) · TZS ${total.toLocaleString("en-US")}${input.restock ? " · restocked" : " · not restocked"}`,
         )({
           ...prev,
           products,
@@ -323,48 +537,60 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       });
       return entry;
     },
-    [state.sales, state.creditNote, state.settings],
+    [commit],
   );
 
-  const updateSettings = useCallback((patch: Partial<TaxSettings>) => {
-    setState((prev) =>
-      log(
-        "Tax settings updated",
-        "VAT / EFD receipt details changed",
-      )({ ...prev, settings: { ...prev.settings, ...patch } }),
-    );
-  }, []);
+  const updateSettings = useCallback(
+    (patch: Partial<TaxSettings>) => {
+      commit((prev) =>
+        log(
+          "Tax settings updated",
+          "VAT / EFD receipt details changed",
+        )({ ...prev, settings: { ...prev.settings, ...patch } }),
+      );
+    },
+    [commit],
+  );
 
-  const addExpense = useCallback((e: Expense) => {
-    setState((prev) =>
-      log(
-        "Expense recorded",
-        `${e.category} · ${e.branch} · TZS ${e.amount.toLocaleString("en-US")}`,
-      )({
-        ...prev,
-        expenses: [e, ...prev.expenses],
-      }),
-    );
-  }, []);
+  const addExpense = useCallback(
+    (e: Expense) => {
+      commit((prev) =>
+        log(
+          "Expense recorded",
+          `${e.category} · ${e.branch} · TZS ${e.amount.toLocaleString("en-US")}`,
+        )({ ...prev, expenses: [e, ...prev.expenses] }),
+      );
+    },
+    [commit],
+  );
 
-  const removeExpense = useCallback((index: number) => {
-    setState((prev) => ({ ...prev, expenses: prev.expenses.filter((_, i) => i !== index) }));
-  }, []);
+  const removeExpense = useCallback(
+    (index: number) => {
+      commit((prev) => ({ ...prev, expenses: prev.expenses.filter((_, i) => i !== index) }));
+    },
+    [commit],
+  );
 
-  const addStaff = useCallback((s: Staff) => {
-    setState((prev) =>
-      log(
-        "User added",
-        `${s.name} · ${s.role} · ${s.branch}`,
-      )({ ...prev, staff: [...prev.staff, s] }),
-    );
-  }, []);
+  const addStaff = useCallback(
+    (s: Staff) => {
+      commit((prev) =>
+        log("User added", `${s.name} · ${s.role} · ${s.branch}`)({
+          ...prev,
+          staff: [...prev.staff, s],
+        }),
+      );
+    },
+    [commit],
+  );
 
-  const removeStaff = useCallback((name: string) => {
-    setState((prev) => ({ ...prev, staff: prev.staff.filter((s) => s.name !== name) }));
-  }, []);
+  const removeStaff = useCallback(
+    (name: string) => {
+      commit((prev) => ({ ...prev, staff: prev.staff.filter((s) => s.name !== name) }));
+    },
+    [commit],
+  );
 
-  const resetAll = useCallback(() => setState(EMPTY), []);
+  const resetAll = useCallback(() => commit(() => EMPTY), [commit]);
 
   const value = useMemo<Ctx>(
     () => ({
@@ -374,6 +600,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       removeProduct,
       adjustStock,
       findByCode,
+      nextBarcode,
+      suggestSku,
       recordSale,
       recordReturn,
       updateSettings,
@@ -390,6 +618,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       removeProduct,
       adjustStock,
       findByCode,
+      nextBarcode,
+      suggestSku,
       recordSale,
       recordReturn,
       updateSettings,
