@@ -16,8 +16,11 @@ import {
   expenseCategories,
   money,
   reports,
+  shopIds,
+  stockOf,
   type BranchId,
   type Product,
+  type ShopId,
 } from "@/lib/toto-data";
 import { branchLabel, useToto, type SaleLine } from "@/lib/toto-store";
 import { Scan } from "lucide-react";
@@ -124,10 +127,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const [scanning, setScanning] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const activeBranch: BranchId = shop === "all" ? "toto" : shop;
+  const activeBranch: ShopId = shop === "all" ? "toto" : shop;
   const assigned = branchLabel(activeBranch);
   const available = useMemo(
-    () => products.filter((p) => p.branch === activeBranch),
+    () => products.filter((p) => stockOf(p, activeBranch) > 0),
     [products, activeBranch],
   );
 
@@ -152,8 +155,9 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
     setCart((prev) => {
       const existing = prev.find((row) => row.sku === item.sku);
       const inCart = existing?.qty ?? 0;
-      if (inCart + 1 > item.qty) {
-        toast(`Only ${item.qty} units of ${item.name} left in stock.`);
+      const stock = stockOf(item, activeBranch);
+      if (inCart + 1 > stock) {
+        toast(`Only ${stock} units of ${item.name} left in ${branchLabel(activeBranch)}.`);
         return prev;
       }
       if (source === "scan") {
@@ -171,7 +175,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               qty: 1,
               sell: item.sell,
               buy: item.buy,
-              stock: item.qty,
+              stock,
             },
           ];
     });
@@ -269,22 +273,25 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         </div>
         {filtered.length ? (
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((p) => (
-              <button
-                key={p.sku}
-                onClick={() => add(p)}
-                disabled={p.qty === 0}
-                className="grid gap-1 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-accent disabled:opacity-40"
-              >
-                <strong className="text-[13px] font-semibold">{p.name}</strong>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {p.barcode} · {money(p.sell)}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  {p.qty > 0 ? `${p.qty} in stock` : "Out of stock"}
-                </span>
-              </button>
-            ))}
+            {filtered.map((p) => {
+              const stock = stockOf(p, activeBranch);
+              return (
+                <button
+                  key={p.sku}
+                  onClick={() => add(p)}
+                  disabled={stock === 0}
+                  className="grid gap-1 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-accent disabled:opacity-40"
+                >
+                  <strong className="text-[13px] font-semibold">{p.name}</strong>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {p.barcode} · {money(p.sell)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {stock > 0 ? `${stock} in stock` : "Out of stock"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <EmptyState
@@ -402,12 +409,18 @@ const emptyProduct = {
   name: "",
   sku: "",
   barcode: "",
-  branch: "toto" as BranchId,
   category: "",
   buy: "",
   sell: "",
-  qty: "",
   min: "",
+  stock: {} as Partial<Record<ShopId, string>>,
+};
+
+const stockLabel = (p: Product) => {
+  const parts = shopIds
+    .filter((id) => (p.stock[id] ?? 0) > 0)
+    .map((id) => `${branchLabel(id)} ${p.stock[id]}`);
+  return parts.length ? parts.join(" · ") : "No stock yet";
 };
 
 export function InventorySection({ shop }: { shop: BranchId }) {
@@ -415,64 +428,78 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState(emptyProduct);
-  const [adjust, setAdjust] = useState<{ sku: string; delta: string; reason: string } | null>(null);
+  const [adjust, setAdjust] = useState<{
+    sku: string;
+    branch: ShopId;
+    delta: string;
+    reason: string;
+  } | null>(null);
 
-  const rows = products.filter((p) => shop === "all" || p.branch === shop);
+  const defaultShop: ShopId = shop === "all" ? "toto" : shop;
+  const rows = products;
 
   function openNew() {
     setEditing(null);
-    setForm({ ...emptyProduct, branch: shop === "all" ? "toto" : shop });
+    setForm({ ...emptyProduct, stock: {} });
     setOpen(true);
   }
 
   function openEdit(p: Product) {
     setEditing(p.sku);
+    const stock: Partial<Record<ShopId, string>> = {};
+    for (const id of shopIds) {
+      if (p.stock[id] !== undefined) stock[id] = String(p.stock[id]);
+    }
     setForm({
       name: p.name,
       sku: p.sku,
       barcode: p.barcode,
-      branch: p.branch,
       category: p.category,
       buy: String(p.buy),
       sell: String(p.sell),
-      qty: String(p.qty),
       min: String(p.min),
+      stock,
     });
     setOpen(true);
   }
 
   function save() {
-    if (!form.name.trim() || !form.sku.trim() || !form.barcode.trim()) {
-      toast("Name, SKU and barcode are required.");
+    if (!form.name.trim()) {
+      toast("Product name is required.");
       return;
     }
-    const duplicate = products.find(
-      (p) => p.sku !== editing && (p.sku === form.sku.trim() || p.barcode === form.barcode.trim()),
-    );
-    if (duplicate) {
-      toast(`SKU or barcode already used by ${duplicate.name}.`);
-      return;
+    const stock: Partial<Record<ShopId, number>> = {};
+    for (const id of shopIds) {
+      const value = Number(form.stock[id]) || 0;
+      if (value > 0) stock[id] = value;
     }
-    const payload: Product = {
+    const payload = {
       name: form.name.trim(),
       sku: form.sku.trim(),
       barcode: form.barcode.trim(),
-      branch: form.branch,
       category: form.category.trim() || "General",
       buy: Number(form.buy) || 0,
       sell: Number(form.sell) || 0,
-      qty: Number(form.qty) || 0,
       min: Number(form.min) || 0,
+      stock,
     };
-    if (editing) updateProduct(editing, payload);
-    else addProduct(payload);
-    toast(editing ? "Product updated" : "Product added", { description: payload.name });
+    const result = editing ? updateProduct(editing, payload) : addProduct(payload);
+    if (!result.ok) {
+      toast(result.error);
+      return;
+    }
+    toast(editing ? "Product updated" : "Product added", {
+      description: `${result.product.name} · ${result.product.barcode}`,
+    });
     setOpen(false);
   }
 
   return (
     <Panel>
-      <PanelHead title="Inventory" description="Stock levels, pricing and low-stock control.">
+      <PanelHead
+        title="Inventory"
+        description="One product identity per business, with stock tracked per shop."
+      >
         <button
           className={btn}
           onClick={() => {
@@ -480,7 +507,12 @@ export function InventorySection({ shop }: { shop: BranchId }) {
               toast("Add a product first.");
               return;
             }
-            setAdjust({ sku: rows[0]?.sku ?? products[0]!.sku, delta: "", reason: "" });
+            setAdjust({
+              sku: rows[0]?.sku ?? products[0]!.sku,
+              branch: defaultShop,
+              delta: "",
+              reason: "",
+            });
           }}
         >
           Stock adjustment
@@ -496,11 +528,11 @@ export function InventorySection({ shop }: { shop: BranchId }) {
               <tr>
                 {[
                   "Product",
-                  "Branch",
+                  "Stock by shop",
                   "Barcode",
                   "Buying",
                   "Selling",
-                  "Qty",
+                  shop === "all" ? "Total qty" : `${branchLabel(shop)} qty`,
                   "Min",
                   "Status",
                   "",
@@ -516,7 +548,8 @@ export function InventorySection({ shop }: { shop: BranchId }) {
             </thead>
             <tbody>
               {rows.map((p) => {
-                const low = p.qty <= p.min;
+                const qty = stockOf(p, shop);
+                const low = qty <= p.min;
                 return (
                   <tr key={p.sku} className="border-b border-border/50 last:border-0">
                     <td className="px-2.5 py-3">
@@ -525,11 +558,13 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                         {p.category} · {p.sku}
                       </span>
                     </td>
-                    <td className="px-2.5 py-3">{branchLabel(p.branch)}</td>
+                    <td className="px-2.5 py-3 text-[12px] text-muted-foreground">
+                      {stockLabel(p)}
+                    </td>
                     <td className="px-2.5 py-3 font-mono">{p.barcode}</td>
                     <td className="px-2.5 py-3 font-mono">{money(p.buy)}</td>
                     <td className="px-2.5 py-3 font-mono">{money(p.sell)}</td>
-                    <td className="px-2.5 py-3 font-mono">{p.qty}</td>
+                    <td className="px-2.5 py-3 font-mono">{qty}</td>
                     <td className="px-2.5 py-3 font-mono text-muted-foreground">{p.min}</td>
                     <td className="px-2.5 py-3">
                       <Pill tone={low ? "low" : "ok"}>{low ? "Low stock" : "In stock"}</Pill>
@@ -562,7 +597,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       ) : (
         <EmptyState
           title="No products yet"
-          copy="Register your products with SKU, barcode, buying and selling price, quantity and minimum stock level to start tracking inventory."
+          copy="Register your products with SKU, barcode, buying and selling price, per-shop stock and minimum stock level to start tracking inventory."
         />
       )}
 
@@ -571,7 +606,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
             <DialogDescription>
-              Barcode and SKU are used by the point of sale scanner.
+              Leave SKU or barcode blank to generate them automatically. Stock is entered per shop.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -589,32 +624,19 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                 onChange={(e) => setForm({ ...form, category: e.target.value })}
               />
             </Field>
-            <Field label="SKU">
+            <Field label="SKU (optional)">
               <input
                 className={field}
                 value={form.sku}
                 onChange={(e) => setForm({ ...form, sku: e.target.value })}
               />
             </Field>
-            <Field label="Barcode">
+            <Field label="Barcode (optional)">
               <input
                 className={field}
                 value={form.barcode}
                 onChange={(e) => setForm({ ...form, barcode: e.target.value })}
               />
-            </Field>
-            <Field label="Branch">
-              <select
-                className={field}
-                value={form.branch}
-                onChange={(e) => setForm({ ...form, branch: e.target.value as BranchId })}
-              >
-                {realBranches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
             </Field>
             <Field label="Buying price (TZS)">
               <input
@@ -632,14 +654,6 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                 onChange={(e) => setForm({ ...form, sell: e.target.value })}
               />
             </Field>
-            <Field label="Quantity">
-              <input
-                className={field}
-                inputMode="numeric"
-                value={form.qty}
-                onChange={(e) => setForm({ ...form, qty: e.target.value })}
-              />
-            </Field>
             <Field label="Minimum stock">
               <input
                 className={field}
@@ -648,6 +662,23 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                 onChange={(e) => setForm({ ...form, min: e.target.value })}
               />
             </Field>
+          </div>
+          <div className="mt-1 grid gap-3">
+            <span className="text-[12px] font-medium text-muted-foreground">Stock per shop</span>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {shopIds.map((id) => (
+                <Field key={id} label={branchLabel(id)}>
+                  <input
+                    className={field}
+                    inputMode="numeric"
+                    value={form.stock[id] ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, stock: { ...form.stock, [id]: e.target.value } })
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
           </div>
           <DialogFooter>
             <button className={btn} onClick={() => setOpen(false)}>
@@ -676,17 +707,31 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                 >
                   {products.map((p) => (
                     <option key={p.sku} value={p.sku}>
-                      {p.name} · {branchLabel(p.branch)} ({p.qty})
+                      {p.name} · {p.sku}
                     </option>
                   ))}
                 </select>
               </Field>
-              <Field label="Change in quantity">
+              <Field label="Shop">
+                <select
+                  className={field}
+                  value={adjust.branch}
+                  onChange={(e) => setAdjust({ ...adjust, branch: e.target.value as ShopId })}
+                >
+                  {shopIds.map((id) => (
+                    <option key={id} value={id}>
+                      {branchLabel(id)} (
+                      {products.find((p) => p.sku === adjust.sku)?.stock[id] ?? 0})
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Quantity change">
                 <input
                   className={field}
+                  inputMode="numeric"
                   value={adjust.delta}
                   onChange={(e) => setAdjust({ ...adjust, delta: e.target.value })}
-                  placeholder="e.g. 12 or -3"
                 />
               </Field>
               <Field label="Reason">
@@ -694,7 +739,6 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                   className={field}
                   value={adjust.reason}
                   onChange={(e) => setAdjust({ ...adjust, reason: e.target.value })}
-                  placeholder="Restock, damage, correction"
                 />
               </Field>
             </div>
@@ -712,7 +756,12 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                   toast("Enter a non-zero quantity change.");
                   return;
                 }
-                adjustStock(adjust.sku, delta, adjust.reason.trim() || "No reason given");
+                adjustStock(
+                  adjust.sku,
+                  adjust.branch,
+                  delta,
+                  adjust.reason.trim() || "No reason given",
+                );
                 toast("Stock adjusted");
                 setAdjust(null);
               }}
@@ -1048,7 +1097,7 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
     rows.filter((r) => shop === "all" || r.branch === shop);
   const sales = scope(store.sales);
   const expenses = scope(store.expenses);
-  const products = scope(store.products);
+  const products = store.products;
   const returns = scope(store.returns);
   const [openReport, setOpenReport] = useState<string | null>(null);
 
@@ -1057,7 +1106,7 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
   const spend = expenses.reduce((s, x) => s + x.amount, 0);
   const cash = sales.filter((s) => s.payment === "Cash").reduce((s, x) => s + x.total, 0);
   const lipa = revenue - cash;
-  const lowStock = products.filter((p) => p.qty <= p.min);
+  const lowStock = products.filter((p) => stockOf(p, shop) <= p.min);
 
   const summaries: Record<string, { label: string; value: string }[]> = {
     "Sales report": [
@@ -1078,12 +1127,12 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
         }, {}),
     ).map(([name, qty]) => ({ label: name, value: `${qty} sold` })),
     "Inventory report": products.map((p) => ({
-      label: `${p.name} · ${branchLabel(p.branch)}`,
-      value: `${p.qty} in stock`,
+      label: `${p.name} · ${p.sku}`,
+      value: `${stockOf(p, shop)} in stock`,
     })),
     "Low-stock report": lowStock.map((p) => ({
-      label: `${p.name} · ${branchLabel(p.branch)}`,
-      value: `${p.qty} / min ${p.min}`,
+      label: `${p.name} · ${p.sku}`,
+      value: `${stockOf(p, shop)} / min ${p.min}`,
     })),
     "Expense report": Object.entries(
       expenses.reduce<Record<string, number>>((acc, e) => {
