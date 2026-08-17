@@ -1,4 +1,5 @@
 export type BranchId = "all" | "toto" | "sunnozy1" | "sunnozy2" | "mimis" | "marc";
+export type ShopId = Exclude<BranchId, "all">;
 
 export type Branch = {
   id: BranchId;
@@ -29,17 +30,32 @@ export const navItems: { id: SectionId; label: string; ownerOnly: boolean }[] = 
   { id: "settings", label: "VAT / EFD", ownerOnly: true },
 ];
 
+/**
+ * A product has ONE global identity (sku + barcode) for the whole business.
+ * Stock is held per shop in `stock`; the same product can live in many shops.
+ */
 export type Product = {
   sku: string;
   barcode: string;
   name: string;
-  branch: BranchId;
   category: string;
   buy: number;
   sell: number;
-  qty: number;
   min: number;
+  stock: Partial<Record<ShopId, number>>;
 };
+
+export const shopIds: ShopId[] = ["toto", "sunnozy1", "sunnozy2", "mimis", "marc"];
+
+export const totalStock = (p: Product) =>
+  shopIds.reduce((sum, id) => sum + (p.stock[id] ?? 0), 0);
+
+export const stockOf = (p: Product, branch: BranchId) =>
+  branch === "all" ? totalStock(p) : (p.stock[branch] ?? 0);
+
+/** Internal (self-generated) barcodes live in the 2000000xxxxx range. */
+export const INTERNAL_BARCODE_PREFIX = "2";
+export const INTERNAL_BARCODE_START = 200000000001;
 
 export const products: Product[] = [];
 
