@@ -4,15 +4,20 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import {
   branches,
+  shopIds,
+  stockOf,
+  INTERNAL_BARCODE_START,
   type Activity,
   type BranchId,
   type Expense,
   type Product,
+  type ShopId,
   type Staff,
 } from "@/lib/toto-data";
 
