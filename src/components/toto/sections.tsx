@@ -16,8 +16,11 @@ import {
   expenseCategories,
   money,
   reports,
+  shopIds,
+  stockOf,
   type BranchId,
   type Product,
+  type ShopId,
 } from "@/lib/toto-data";
 import { branchLabel, useToto, type SaleLine } from "@/lib/toto-store";
 import { Scan } from "lucide-react";
@@ -124,10 +127,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const [scanning, setScanning] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const activeBranch: BranchId = shop === "all" ? "toto" : shop;
+  const activeBranch: ShopId = shop === "all" ? "toto" : shop;
   const assigned = branchLabel(activeBranch);
   const available = useMemo(
-    () => products.filter((p) => p.branch === activeBranch),
+    () => products.filter((p) => stockOf(p, activeBranch) > 0),
     [products, activeBranch],
   );
 
@@ -152,8 +155,9 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
     setCart((prev) => {
       const existing = prev.find((row) => row.sku === item.sku);
       const inCart = existing?.qty ?? 0;
-      if (inCart + 1 > item.qty) {
-        toast(`Only ${item.qty} units of ${item.name} left in stock.`);
+      const stock = stockOf(item, activeBranch);
+      if (inCart + 1 > stock) {
+        toast(`Only ${stock} units of ${item.name} left in ${branchLabel(activeBranch)}.`);
         return prev;
       }
       if (source === "scan") {
@@ -171,7 +175,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               qty: 1,
               sell: item.sell,
               buy: item.buy,
-              stock: item.qty,
+              stock,
             },
           ];
     });
@@ -269,22 +273,25 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         </div>
         {filtered.length ? (
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((p) => (
-              <button
-                key={p.sku}
-                onClick={() => add(p)}
-                disabled={p.qty === 0}
-                className="grid gap-1 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-accent disabled:opacity-40"
-              >
-                <strong className="text-[13px] font-semibold">{p.name}</strong>
-                <span className="font-mono text-[11px] text-muted-foreground">
-                  {p.barcode} · {money(p.sell)}
-                </span>
-                <span className="text-[11px] text-muted-foreground">
-                  {p.qty > 0 ? `${p.qty} in stock` : "Out of stock"}
-                </span>
-              </button>
-            ))}
+            {filtered.map((p) => {
+              const stock = stockOf(p, activeBranch);
+              return (
+                <button
+                  key={p.sku}
+                  onClick={() => add(p)}
+                  disabled={stock === 0}
+                  className="grid gap-1 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-accent disabled:opacity-40"
+                >
+                  <strong className="text-[13px] font-semibold">{p.name}</strong>
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {p.barcode} · {money(p.sell)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {stock > 0 ? `${stock} in stock` : "Out of stock"}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         ) : (
           <EmptyState
