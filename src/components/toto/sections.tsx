@@ -964,35 +964,110 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
 /* ---------------- Staff ---------------- */
 
 export function StaffSection() {
-  const { staff, addStaff, removeStaff } = useToto();
+  const queryClient = useQueryClient();
+  const listStaffFn = useServerFn(listStaff);
+  const createStaffFn = useServerFn(createStaffAccount);
+  const deleteStaffFn = useServerFn(deleteStaffAccount);
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
-    role: "Cashier" as "Owner" | "Cashier",
-    branch: "toto" as BranchId,
-    detail: "",
+    email: "",
+    password: "",
+    role: "cashier" as "owner" | "cashier",
+    branch: "toto" as ShopId,
   });
+
+  const { data: people = [], isLoading, error } = useQuery({
+    queryKey: ["staff-accounts"],
+    queryFn: () => listStaffFn(),
+  });
+
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["staff-accounts"] });
+
+  const submit = async () => {
+    if (!form.name.trim()) {
+      toast("Enter the user's full name.");
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
+      toast("Enter a valid login email.");
+      return;
+    }
+    if (form.password.length < 6) {
+      toast("Password must be at least 6 characters.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createStaffFn({
+        data: {
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+          fullName: form.name.trim(),
+          branch: form.branch,
+          role: form.role,
+        },
+      });
+      toast("Account created", {
+        description: `${form.email.trim().toLowerCase()} can now sign in.`,
+      });
+      setForm({ name: "", email: "", password: "", role: "cashier", branch: form.branch });
+      setOpen(false);
+      await refresh();
+    } catch (e) {
+      toast("Could not create the account", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (person: StaffAccount) => {
+    try {
+      await deleteStaffFn({ data: { id: person.id } });
+      toast("Account removed", { description: person.email });
+      await refresh();
+    } catch (e) {
+      toast("Could not remove the account", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    }
+  };
 
   return (
     <Panel>
-      <PanelHead title="Staff and access" description="Owner and cashier accounts per branch.">
+      <PanelHead
+        title="Staff and access"
+        description="Create real login accounts. Cashiers only see point of sale and returns for their shop."
+      >
         <button className={btnPrimary} onClick={() => setOpen(true)}>
-          Add user
+          Create account
         </button>
       </PanelHead>
-      {staff.length ? (
+
+      {isLoading ? (
+        <p className="text-[13px] text-muted-foreground">Loading accounts…</p>
+      ) : error ? (
+        <p className="text-[13px] text-destructive">
+          Could not load accounts. Only the owner can manage staff.
+        </p>
+      ) : people.length ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {staff.map((person) => (
+          {people.map((person) => (
             <MiniCard
-              key={person.name}
-              title={`${person.name} · ${branchLabel(person.branch)}`}
-              copy={person.detail}
+              key={person.id}
+              title={`${person.fullName} · ${branchLabel(person.branch as BranchId)}`}
+              copy={person.email}
               top={
                 <div className="flex items-center gap-2">
-                  <Pill tone={person.role === "Owner" ? "ok" : "neutral"}>{person.role}</Pill>
+                  <Pill tone={person.role === "owner" ? "ok" : "neutral"}>
+                    {person.role === "owner" ? "Owner" : "Cashier"}
+                  </Pill>
                   <button
                     className="text-[12px] text-muted-foreground hover:text-destructive"
-                    onClick={() => removeStaff(person.name)}
+                    onClick={() => remove(person)}
                   >
                     Remove
                   </button>
@@ -1003,16 +1078,18 @@ export function StaffSection() {
         </div>
       ) : (
         <EmptyState
-          title="No users yet"
-          copy="Create the owner account and cashier accounts. Cashiers are limited to point of sale for their assigned shop."
+          title="No accounts yet"
+          copy="Create cashier accounts with an email and password so they can sign in on the shop device."
         />
       )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add user</DialogTitle>
-            <DialogDescription>Name, role and assigned shop.</DialogDescription>
+            <DialogTitle>Create login account</DialogTitle>
+            <DialogDescription>
+              The cashier signs in with this email and password at the login screen.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <Field label="Full name">
@@ -1022,21 +1099,41 @@ export function StaffSection() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
             </Field>
+            <Field label="Login email">
+              <input
+                className={field}
+                type="email"
+                autoComplete="off"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="cashier@totoempire.co.tz"
+              />
+            </Field>
+            <Field label="Temporary password">
+              <input
+                className={field}
+                type="text"
+                autoComplete="new-password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="At least 6 characters"
+              />
+            </Field>
             <Field label="Role">
               <select
                 className={field}
                 value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as "Owner" | "Cashier" })}
+                onChange={(e) => setForm({ ...form, role: e.target.value as "owner" | "cashier" })}
               >
-                <option value="Owner">Owner</option>
-                <option value="Cashier">Cashier</option>
+                <option value="cashier">Cashier</option>
+                <option value="owner">Owner</option>
               </select>
             </Field>
             <Field label="Assigned shop">
               <select
                 className={field}
                 value={form.branch}
-                onChange={(e) => setForm({ ...form, branch: e.target.value as BranchId })}
+                onChange={(e) => setForm({ ...form, branch: e.target.value as ShopId })}
               >
                 {realBranches.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -1045,42 +1142,13 @@ export function StaffSection() {
                 ))}
               </select>
             </Field>
-            <Field label="Notes">
-              <input
-                className={field}
-                value={form.detail}
-                onChange={(e) => setForm({ ...form, detail: e.target.value })}
-                placeholder="Shift, phone number, access notes"
-              />
-            </Field>
           </div>
           <DialogFooter>
             <button className={btn} onClick={() => setOpen(false)}>
               Cancel
             </button>
-            <button
-              className={btnPrimary}
-              onClick={() => {
-                if (!form.name.trim()) {
-                  toast("Enter the user's name.");
-                  return;
-                }
-                if (staff.some((s) => s.name === form.name.trim())) {
-                  toast("A user with that name already exists.");
-                  return;
-                }
-                addStaff({
-                  name: form.name.trim(),
-                  role: form.role,
-                  branch: form.branch,
-                  detail: form.detail.trim() || `${form.role} at ${branchLabel(form.branch)}`,
-                });
-                toast("User added", { description: form.name.trim() });
-                setForm({ ...form, name: "", detail: "" });
-                setOpen(false);
-              }}
-            >
-              Add user
+            <button className={btnPrimary} onClick={submit} disabled={saving}>
+              {saving ? "Creating…" : "Create account"}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -1088,6 +1156,7 @@ export function StaffSection() {
     </Panel>
   );
 }
+
 
 /* ---------------- Reports ---------------- */
 
