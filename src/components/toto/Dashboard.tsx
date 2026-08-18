@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/toto/Sidebar";
 import {
   ExpensesSection,
@@ -121,6 +120,7 @@ function DashboardInner() {
       />
 
       <main className="min-w-0 px-4 pt-7 pb-28 sm:px-6 lg:px-10">
+        {/* Header */}
         <header className="mb-7 flex flex-col justify-between gap-4 border-b border-border pb-6 lg:flex-row lg:items-end">
           <div>
             <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -163,10 +163,11 @@ function DashboardInner() {
           </div>
         </header>
 
+        {/* Metrics - Only show on Overview */}
         {isOwner && activeSection === "overview" && (
           <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((metric) => (
-              <article key={metric.label} className="panel p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+              <article key={metric.label} className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
                 <div className="text-[12px] font-medium text-muted-foreground">{metric.label}</div>
                 <div className="mt-2 font-mono text-xl font-bold">{metric.value}</div>
                 <div className="mt-1 text-[12px] text-muted-foreground">{metric.note}</div>
@@ -175,24 +176,7 @@ function DashboardInner() {
           </section>
         )}
 
-        <div className="mb-5 flex w-full max-w-full gap-1 overflow-x-auto rounded-md border border-border bg-card p-1">
-          {visibleNav.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setSection(item.id)}
-              className={cn(
-                "min-h-8 rounded-md px-3 text-[13px] font-medium whitespace-nowrap transition-colors",
-                activeSection === item.id
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {item.icon && <span className="mr-2">{item.icon}</span>}
-              {item.label}
-            </button>
-          ))}
-        </div>
-
+        {/* Sections - No duplicate navigation tabs */}
         {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
         {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
         {activeSection === "returns" && (
@@ -205,6 +189,7 @@ function DashboardInner() {
         {activeSection === "settings" && isOwner && <SettingsSection />}
       </main>
 
+      {/* Mobile Bottom Navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-1 border-t border-border bg-card p-2 md:hidden shadow-lg">
         {visibleNav.slice(0, 5).map((item) => (
           <button
@@ -224,7 +209,7 @@ function DashboardInner() {
   );
 }
 
-// ✅ THIS IS THE FIX - Named export that matches the import
+// ✅ Export the Dashboard component
 export function Dashboard() {
   return (
     <TotoStoreProvider>
