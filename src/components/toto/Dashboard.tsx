@@ -228,21 +228,6 @@ function DashboardInner() {
         {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
         {activeSection === "settings" && isOwner && <SettingsSection />}
       </main>
-
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-1 border-t border-border bg-card p-2 md:hidden">
-        {visibleNav.slice(0, 5).map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setSection(item.id)}
-            className={cn(
-              "min-h-10 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
-              activeSection === item.id && "bg-primary text-primary-foreground",
-            )}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
     </div>
   );
 }
