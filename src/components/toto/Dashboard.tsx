@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/toto/Sidebar";
 import {
   ExpensesSection,
@@ -120,7 +121,6 @@ function DashboardInner() {
       />
 
       <main className="min-w-0 px-4 pt-7 pb-28 sm:px-6 lg:px-10">
-        {/* Header */}
         <header className="mb-7 flex flex-col justify-between gap-4 border-b border-border pb-6 lg:flex-row lg:items-end">
           <div>
             <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
@@ -163,7 +163,6 @@ function DashboardInner() {
           </div>
         </header>
 
-        {/* Metrics - Only show on Overview */}
         {isOwner && activeSection === "overview" && (
           <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((metric) => (
@@ -176,7 +175,6 @@ function DashboardInner() {
           </section>
         )}
 
-        {/* Sections - No duplicate navigation tabs */}
         {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
         {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
         {activeSection === "returns" && (
@@ -189,7 +187,6 @@ function DashboardInner() {
         {activeSection === "settings" && isOwner && <SettingsSection />}
       </main>
 
-      {/* Mobile Bottom Navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-1 border-t border-border bg-card p-2 md:hidden shadow-lg">
         {visibleNav.slice(0, 5).map((item) => (
           <button
@@ -209,8 +206,8 @@ function DashboardInner() {
   );
 }
 
-// ✅ Export the Dashboard component
-export function Dashboard() {
+// ✅ DEFAULT EXPORT - This is what TanStack Router prefers
+export default function Dashboard() {
   return (
     <TotoStoreProvider>
       <DashboardInner />
