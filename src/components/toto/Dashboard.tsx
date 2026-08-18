@@ -40,7 +40,7 @@ export function Dashboard() {
 function DashboardInner() {
   const navigate = useNavigate();
   const { user, role, signOut } = useAuth();
-  const isOwner = role !== "cashier";
+  const isOwner = role === "owner";
   const cashier = user?.user_metadata?.["full_name"] ?? user?.email ?? "Staff";
 
   const [shop, setShop] = useState<BranchId>("all");
