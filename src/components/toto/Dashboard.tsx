@@ -45,6 +45,7 @@ function DashboardInner() {
 
   const [shop, setShop] = useState<BranchId>("all");
   const [section, setSection] = useState<SectionId>("pos");
+  const [menuOpen, setMenuOpen] = useState(false);
   const { sales, returns, expenses, products } = useToto();
 
   const effectiveShop: BranchId = isOwner ? shop : shop === "all" ? "toto" : shop;
