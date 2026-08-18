@@ -206,8 +206,9 @@ function DashboardInner() {
   );
 }
 
-// ✅ DEFAULT EXPORT - This is what TanStack Router prefers
-export default function Dashboard() {
+// ⚠️ CRITICAL: THIS MUST BE THE VERY LAST LINE IN THE FILE
+// Named export - matches the import in the route file
+export function Dashboard() {
   return (
     <TotoStoreProvider>
       <DashboardInner />
