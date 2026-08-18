@@ -45,7 +45,6 @@ function DashboardInner() {
 
   const [shop, setShop] = useState<BranchId>("all");
   const [section, setSection] = useState<SectionId>("pos");
-  const [menuOpen, setMenuOpen] = useState(false);
   const { sales, returns, expenses, products } = useToto();
 
   const effectiveShop: BranchId = isOwner ? shop : shop === "all" ? "toto" : shop;
@@ -105,36 +104,17 @@ function DashboardInner() {
         shop={effectiveShop}
         section={activeSection}
         isOwner={isOwner}
-        open={menuOpen}
         onShop={setShop}
         onSection={setSection}
-        onClose={() => setMenuOpen(false)}
       />
 
-      <main className="min-w-0 px-4 pt-4 pb-12 sm:px-6 sm:pt-7 lg:px-10">
-        <div className="mb-4 flex items-center gap-3 md:hidden">
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Open menu"
-            className="grid size-10 shrink-0 place-items-center rounded-md border border-border bg-card"
-          >
-            <Menu className="size-4" />
-          </button>
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold">{data.name}</p>
-            <p className="truncate text-[11px] text-muted-foreground">
-              {isOwner ? "Owner" : "Cashier"} · {navItems.find((n) => n.id === activeSection)?.label}
-            </p>
-          </div>
-        </div>
-
-        <header className="mb-6 flex flex-col justify-between gap-4 border-b border-border pb-5 sm:mb-7 sm:pb-6 lg:flex-row lg:items-end">
-          <div className="min-w-0">
+      <main className="min-w-0 px-4 pt-7 pb-28 sm:px-6 lg:px-10">
+        <header className="mb-7 flex flex-col justify-between gap-4 border-b border-border pb-6 lg:flex-row lg:items-end">
+          <div>
             <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
               {data.name} · {isOwner ? "Owner" : "Cashier"}
             </p>
-            <h1 className="mt-2 text-xl font-semibold tracking-tight sm:text-3xl">
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
               {isOwner ? "Business overview" : `Point of sale — ${data.name}`}
             </h1>
             <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
@@ -144,7 +124,7 @@ function DashboardInner() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex min-h-9 max-w-full items-center truncate rounded-md border border-border bg-card px-3 text-[12px] text-muted-foreground">
+            <span className="inline-flex min-h-9 items-center rounded-md border border-border bg-card px-3 text-[12px] text-muted-foreground">
               {user?.email}
             </span>
             {isOwner && (
@@ -228,6 +208,21 @@ function DashboardInner() {
         {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
         {activeSection === "settings" && isOwner && <SettingsSection />}
       </main>
+
+      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-1 border-t border-border bg-card p-2 md:hidden">
+        {visibleNav.slice(0, 5).map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setSection(item.id)}
+            className={cn(
+              "min-h-10 rounded-md px-1 text-[11px] font-medium text-muted-foreground",
+              activeSection === item.id && "bg-primary text-primary-foreground",
+            )}
+          >
+            {item.label}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
