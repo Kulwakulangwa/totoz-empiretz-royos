@@ -131,4 +131,619 @@ type Ctx = State & {
   nextBarcode: () => string;
   suggestSku: (name: string) => string;
   recordSale: (input: {
-   
+    branch: BranchId;
+    cashier: string;
+    payment: "Cash" | "Lipa Namba";
+    lines: SaleLine[];
+  }) => Promise<Sale>;
+  recordReturn: (input: {
+    saleId: string;
+    cashier: string;
+    reason: string;
+    restock: boolean;
+    lines: SaleLine[];
+  }) => Promise<SaleReturn | undefined>;
+  updateSettings: (patch: Partial<TaxSettings>) => Promise<void>;
+  addExpense: (e: Expense) => Promise<void>;
+  removeExpense: (id: string) => Promise<void>;
+  addStaff: (s: Staff) => Promise<void>;
+  removeStaff: (name: string) => Promise<void>;
+  resetAll: () => void;
+  refreshData: () => Promise<void>;
+  loading: boolean;
+  error: string | null;
+};
+
+const StoreContext = createContext<Ctx | null>(null);
+
+const today = () => new Date().toISOString().slice(0, 10);
+const timeLabel = () =>
+  new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
+
+const norm = (v: string) => v.trim().toLowerCase();
+
+function nextInternalBarcode(products: Product[]): string {
+  const used = new Set(products.map((p) => p.barcode));
+  let candidate = INTERNAL_BARCODE_START;
+  for (const p of products) {
+    const n = Number(p.barcode);
+    if (Number.isSafeInteger(n) && n >= INTERNAL_BARCODE_START && n >= candidate) {
+      candidate = n + 1;
+    }
+  }
+  while (used.has(String(candidate))) candidate += 1;
+  return String(candidate);
+}
+
+function skuPrefix(name: string) {
+  const words = name
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const letters = words.map((w) => w[0]).join("");
+  return (letters || "SKU").slice(0, 3).padEnd(2, "X");
+}
+
+function nextSku(products: Product[], name: string): string {
+  const prefix = skuPrefix(name);
+  const used = new Set(products.map((p) => norm(p.sku)));
+  let n = 1;
+  let candidate = `${prefix}-${String(n).padStart(4, "0")}`;
+  while (used.has(norm(candidate))) {
+    n += 1;
+    candidate = `${prefix}-${String(n).padStart(4, "0")}`;
+  }
+  return candidate;
+}
+
+const cleanStock = (stock: Partial<Record<ShopId, number>>) => {
+  const out: Partial<Record<ShopId, number>> = {};
+  for (const id of shopIds) {
+    const value = Math.max(0, Math.round(Number(stock[id]) || 0));
+    if (value > 0) out[id] = value;
+  }
+  return out;
+};
+
+export function TotoStoreProvider({ children }: { children: ReactNode }) {
+  const { user, role, staffProfile } = useAuth();
+  const [state, setState] = useState<State>(EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const ref = useRef<State>(EMPTY);
+
+  useEffect(() => {
+    ref.current = state;
+  }, [state]);
+
+  const commit = useCallback((updater: (prev: State) => State) => {
+    const next = updater(ref.current);
+    ref.current = next;
+    setState(next);
+    return next;
+  }, []);
+
+  const log = (title: string, desc: string) => (prev: State): State => ({
+    ...prev,
+    activities: [{ title, desc, time: `${today()} ${timeLabel()}` }, ...prev.activities].slice(0, 40),
+  });
+
+  const refreshData = useCallback(async () => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const isOwner = role === "owner";
+      const userBranch = staffProfile?.branch_id;
+
+      let productsQuery = supabase.from('products').select('*');
+      if (!isOwner && userBranch) {
+        productsQuery = productsQuery.eq('branch_id', userBranch);
+      }
+
+      const { data: productsData, error: productsError } = await productsQuery;
+      if (productsError) throw productsError;
+
+      const mappedProducts: Product[] = (productsData || []).map(p => ({
+        name: p.name,
+        sku: p.sku,
+        barcode: p.barcode || '',
+        category: p.category || 'General',
+        buy: Number(p.buying_price) || 0,
+        sell: Number(p.selling_price) || 0,
+        min: Number(p.min_stock) || 5,
+        stock: { [getBranchIdFromUuid(p.branch_id)]: Number(p.quantity) || 0 } as Partial<Record<ShopId, number>>,
+      }));
+
+      let salesQuery = supabase
+        .from('sales')
+        .select(`
+          *,
+          sale_items(*)
+        `);
+
+      if (!isOwner && userBranch) {
+        salesQuery = salesQuery.eq('branch_id', userBranch);
+      }
+
+      const { data: salesData, error: salesError } = await salesQuery.order('created_at', { ascending: false });
+      if (salesError) throw salesError;
+
+      const mappedSales: Sale[] = (salesData || []).map(s => {
+        const items = s.sale_items || [];
+        const lines: SaleLine[] = items.map((item: any) => ({
+          sku: item.sku || '',
+          name: item.product_name,
+          qty: item.quantity || 0,
+          sell: Number(item.unit_price) || 0,
+          buy: Number(item.unit_price) * 0.7 || 0,
+        }));
+
+        return {
+          id: s.id,
+          receipt: parseInt(s.receipt_number?.replace('REC-', '') || '1'),
+          date: s.created_at?.split('T')[0] || today(),
+          branch: getBranchIdFromUuid(s.branch_id),
+          cashier: s.cashier_id || 'Unknown',
+          payment: (s.payment_method as "Cash" | "Lipa Namba") || 'Cash',
+          lines,
+          total: Number(s.total) || 0,
+          cost: Number(s.subtotal) || 0,
+          vat: Number(s.tax) || 0,
+        };
+      });
+
+      let expensesQuery = supabase.from('expenses').select('*');
+      if (!isOwner && userBranch) {
+        expensesQuery = expensesQuery.eq('branch_id', userBranch);
+      }
+
+      const { data: expensesData, error: expensesError } = await expensesQuery.order('expense_date', { ascending: false });
+      if (expensesError) throw expensesError;
+
+      const mappedExpenses: Expense[] = (expensesData || []).map(e => ({
+        id: e.id,
+        date: e.expense_date || today(),
+        branch: getBranchIdFromUuid(e.branch_id),
+        category: e.category,
+        description: e.description || '',
+        amount: Number(e.amount) || 0,
+        note: e.description || '',
+        created_by: e.created_by || undefined,
+      }));
+
+      const newState: State = {
+        ...EMPTY,
+        products: mappedProducts,
+        sales: mappedSales,
+        expenses: mappedExpenses,
+        returns: [],
+        staff: [],
+        activities: [],
+        receipt: mappedSales.length > 0 ? Math.max(...mappedSales.map(s => s.receipt)) + 1 : 1,
+        creditNote: 1,
+        settings: defaultTaxSettings,
+      };
+
+      ref.current = newState;
+      setState(newState);
+      setLoading(false);
+      setError(null);
+
+    } catch (err: any) {
+      console.error('Error loading data:', err);
+      setError(err.message);
+      setLoading(false);
+    }
+  }, [user, role, staffProfile]);
+
+  useEffect(() => {
+    if (user) {
+      refreshData();
+    } else {
+      setState(EMPTY);
+      setLoading(false);
+    }
+  }, [user, refreshData]);
+
+  const nextBarcode = useCallback(() => nextInternalBarcode(ref.current.products), []);
+  const suggestSku = useCallback((name: string) => nextSku(ref.current.products, name), []);
+
+  const findByCode = useCallback((code: string, branch: BranchId) => {
+    const q = norm(code);
+    if (!q) return undefined;
+    const match = state.products.find((p) => norm(p.barcode) === q || norm(p.sku) === q);
+    if (!match) return undefined;
+    return branch === "all" || stockOf(match, branch) >= 0 ? match : undefined;
+  }, [state.products]);
+
+  const addProduct = useCallback(async (input: ProductInput): Promise<SaveResult> => {
+    const name = input.name.trim();
+    if (!name) return { ok: false, error: "Product name is required." };
+
+    const others = ref.current.products.filter((p) => p.sku !== null);
+
+    const sku = input.sku.trim() || nextSku(ref.current.products, name);
+    if (others.some((p) => norm(p.sku) === norm(sku))) {
+      return { ok: false, error: "This SKU is already assigned to another product." };
+    }
+
+    let barcode = input.barcode.trim();
+    if (!barcode) {
+      barcode = nextInternalBarcode(ref.current.products);
+    } else if (others.some((p) => norm(p.barcode) === norm(barcode))) {
+      return { ok: false, error: "This barcode is already assigned to another product." };
+    }
+
+    const branch = Object.keys(input.stock)[0] as ShopId || 'toto';
+    const quantity = input.stock[branch] || 0;
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert({
+          name,
+          sku,
+          barcode,
+          category: input.category.trim() || 'General',
+          buying_price: Number(input.buy) || 0,
+          selling_price: Number(input.sell) || 0,
+          min_stock: Math.max(0, Number(input.min) || 0),
+          branch_id: getBranchUuid(branch),
+          quantity: quantity,
+          unit: 'pcs',
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const product: Product = {
+        name,
+        sku,
+        barcode,
+        category: input.category.trim() || 'General',
+        buy: Number(input.buy) || 0,
+        sell: Number(input.sell) || 0,
+        min: Math.max(0, Number(input.min) || 0),
+        stock: { [branch]: quantity } as Partial<Record<ShopId, number>>,
+      };
+
+      commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode}`));
+      await refreshData();
+      return { ok: true, product };
+    } catch (err: any) {
+      console.error('Error adding product:', err);
+      return { ok: false, error: err.message };
+    }
+  }, [commit, refreshData]);
+
+  const updateProduct = useCallback(async (sku: string, input: ProductInput): Promise<SaveResult> => {
+    const name = input.name.trim();
+    if (!name) return { ok: false, error: "Product name is required." };
+
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({
+          name,
+          category: input.category.trim() || 'General',
+          buying_price: Number(input.buy) || 0,
+          selling_price: Number(input.sell) || 0,
+          min_stock: Math.max(0, Number(input.min) || 0),
+        })
+        .eq('sku', sku);
+
+      if (error) throw error;
+
+      commit(log("Product updated", `${name} · ${sku}`));
+      await refreshData();
+      const product = ref.current.products.find(p => p.sku === sku);
+      return { ok: true, product: product! };
+    } catch (err: any) {
+      return { ok: false, error: err.message };
+    }
+  }, [commit, refreshData]);
+
+  const removeProduct = useCallback(async (sku: string) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('sku', sku);
+
+      if (error) throw error;
+      commit(log("Product removed", `${sku} deleted from inventory`));
+      await refreshData();
+    } catch (err: any) {
+      console.error('Error removing product:', err);
+    }
+  }, [commit, refreshData]);
+
+  const adjustStock = useCallback(async (sku: string, branch: ShopId, delta: number, reason: string) => {
+    try {
+      const { data: product } = await supabase
+        .from('products')
+        .select('quantity, branch_id')
+        .eq('sku', sku)
+        .single();
+
+      if (!product) return;
+
+      const newQuantity = Math.max(0, (product.quantity || 0) + delta);
+
+      const { error } = await supabase
+        .from('products')
+        .update({ quantity: newQuantity })
+        .eq('sku', sku);
+
+      if (error) throw error;
+
+      commit(log("Stock adjusted", `${sku} · ${branch} ${delta > 0 ? '+' : ''}${delta} · ${reason}`));
+      await refreshData();
+    } catch (err: any) {
+      console.error('Error adjusting stock:', err);
+    }
+  }, [commit, refreshData]);
+
+  const recordSale = useCallback(async (input: {
+    branch: BranchId;
+    cashier: string;
+    payment: "Cash" | "Lipa Namba";
+    lines: SaleLine[];
+  }): Promise<Sale> => {
+    const total = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
+    const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
+    const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
+    const receiptNumber = ref.current.receipt;
+
+    try {
+      const { data: saleData, error: saleError } = await supabase
+        .from('sales')
+        .insert({
+          receipt_number: `REC-${receiptNumber}`,
+          branch_id: getBranchUuid(branch),
+          cashier_id: input.cashier,
+          payment_method: input.payment,
+          total: total,
+          subtotal: total,
+          tax: 0,
+          payment_status: 'completed',
+        })
+        .select()
+        .single();
+
+      if (saleError) throw saleError;
+
+      for (const line of input.lines) {
+        const { error: itemError } = await supabase
+          .from('sale_items')
+          .insert({
+            sale_id: saleData.id,
+            product_name: line.name,
+            sku: line.sku,
+            quantity: line.qty,
+            unit_price: line.sell,
+            total_price: line.sell * line.qty,
+          });
+
+        if (itemError) throw itemError;
+
+        const { data: product } = await supabase
+          .from('products')
+          .select('quantity')
+          .eq('sku', line.sku)
+          .single();
+
+        if (product) {
+          await supabase
+            .from('products')
+            .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
+            .eq('sku', line.sku);
+        }
+      }
+
+      const sale: Sale = {
+        id: saleData.id,
+        receipt: receiptNumber,
+        date: today(),
+        branch,
+        cashier: input.cashier,
+        payment: input.payment,
+        lines: input.lines,
+        total,
+        cost,
+        vat: vatOf(total, ref.current.settings),
+      };
+
+      commit((prev) => log(
+        `Sale #${String(sale.receipt).padStart(4, "0")}`,
+        `${branchLabel(branch)} · ${input.cashier} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
+      )({
+        ...prev,
+        sales: [sale, ...prev.sales],
+        receipt: prev.receipt + 1,
+      }));
+
+      await refreshData();
+      return sale;
+    } catch (err: any) {
+      console.error('Error recording sale:', err);
+      throw err;
+    }
+  }, [commit, refreshData]);
+
+  const recordReturn = useCallback(async (input: {
+    saleId: string;
+    cashier: string;
+    reason: string;
+    restock: boolean;
+    lines: SaleLine[];
+  }): Promise<SaleReturn | undefined> => {
+    const sale = ref.current.sales.find((s) => s.id === input.saleId);
+    if (!sale) return undefined;
+    const lines = input.lines.filter((l) => l.qty > 0);
+    if (!lines.length) return undefined;
+    const total = lines.reduce((s, l) => s + l.sell * l.qty, 0);
+    const cost = lines.reduce((s, l) => s + l.buy * l.qty, 0);
+    const branch: ShopId = sale.branch === "all" ? "toto" : sale.branch;
+
+    const entry: SaleReturn = {
+      id: `r${Date.now()}`,
+      saleId: sale.id,
+      receipt: sale.receipt,
+      creditNote: ref.current.creditNote,
+      date: today(),
+      branch,
+      cashier: input.cashier,
+      reason: input.reason,
+      lines,
+      total,
+      cost,
+      vat: vatOf(total, ref.current.settings),
+      restock: input.restock,
+    };
+
+    if (input.restock) {
+      for (const line of lines) {
+        const { data: product } = await supabase
+          .from('products')
+          .select('quantity')
+          .eq('sku', line.sku)
+          .single();
+
+        if (product) {
+          await supabase
+            .from('products')
+            .update({ quantity: (product.quantity || 0) + line.qty })
+            .eq('sku', line.sku);
+        }
+      }
+    }
+
+    commit(log(
+      `Return CN-${String(entry.creditNote).padStart(4, "0")}`,
+      `Receipt #${String(sale.receipt).padStart(4, "0")} · ${branchLabel(branch)} · ${lines.reduce((s, l) => s + l.qty, 0)} item(s) · TZS ${total.toLocaleString("en-US")}`,
+    )({
+      ...prev,
+      returns: [entry, ...prev.returns],
+      creditNote: prev.creditNote + 1,
+    }));
+
+    await refreshData();
+    return entry;
+  }, [commit, refreshData]);
+
+  const addExpense = useCallback(async (e: Expense) => {
+    try {
+      const { error } = await supabase
+        .from('expenses')
+        .insert({
+          branch_id: getBranchUuid(e.branch),
+          category: e.category,
+          description: e.description,
+          amount: e.amount,
+          expense_date: e.date || today(),
+          created_by: e.created_by || null,
+        });
+
+      if (error) throw error;
+
+      commit(log("Expense recorded", `${e.category} · ${e.branch} · TZS ${e.amount.toLocaleString("en-US")}`));
+      await refreshData();
+    } catch (err: any) {
+      console.error('Error adding expense:', err);
+    }
+  }, [commit, refreshData]);
+
+  const removeExpense = useCallback(async (id: string) => {
+    try {
+      await supabase.from('expenses').delete().eq('id', id);
+      commit((prev) => ({ ...prev, expenses: prev.expenses.filter(e => e.id !== id) }));
+      await refreshData();
+    } catch (err) {
+      console.error('Error removing expense:', err);
+    }
+  }, [commit, refreshData]);
+
+  const addStaff = useCallback(async (s: Staff) => {
+    console.log('Add staff:', s);
+  }, []);
+
+  const removeStaff = useCallback(async (name: string) => {
+    console.log('Remove staff:', name);
+  }, []);
+
+  const updateSettings = useCallback(async (patch: Partial<TaxSettings>) => {
+    commit((prev) => log("Tax settings updated", "VAT / EFD receipt details changed")({
+      ...prev,
+      settings: { ...prev.settings, ...patch }
+    }));
+  }, [commit]);
+
+  const resetAll = useCallback(() => {
+    commit(() => ({ ...EMPTY }));
+  }, [commit]);
+
+  const value = useMemo<Ctx>(() => ({
+    ...state,
+    addProduct,
+    updateProduct,
+    removeProduct,
+    adjustStock,
+    findByCode,
+    nextBarcode,
+    suggestSku,
+    recordSale,
+    recordReturn,
+    updateSettings,
+    addExpense,
+    removeExpense,
+    addStaff,
+    removeStaff,
+    resetAll,
+    refreshData,
+    loading,
+    error,
+  }), [
+    state,
+    addProduct,
+    updateProduct,
+    removeProduct,
+    adjustStock,
+    findByCode,
+    nextBarcode,
+    suggestSku,
+    recordSale,
+    recordReturn,
+    updateSettings,
+    addExpense,
+    removeExpense,
+    addStaff,
+    removeStaff,
+    resetAll,
+    refreshData,
+    loading,
+    error,
+  ]);
+
+  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
+}
+
+// ✅ EXPORT THE HOOK - MUST BE HERE
+export function useToto() {
+  const ctx = useContext(StoreContext);
+  if (!ctx) throw new Error("useToto must be used inside TotoStoreProvider");
+  return ctx;
+}
+
+// ✅ EXPORT THE CONTEXT
+export { StoreContext };
