@@ -1,16 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Scan, X } from "lucide-react";
+import { Html5Qrcode } from "html5-qrcode";
+import { Scan, X, Camera, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-declare global {
-  interface Window {
-    BarcodeDetector?: typeof BarcodeDetector;
-  }
-  class BarcodeDetector {
-    constructor(options?: { formats?: string[] });
-    detect(image: ImageBitmapSource): Promise<{ rawValue: string }[]>;
-  }
-}
 
 const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -22,170 +13,100 @@ export type BarcodeScannerProps = {
 };
 
 export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const detectorRef = useRef<BarcodeDetector | null>(null);
-  const scanningRef = useRef(false);
-  const [status, setStatus] = useState<"idle" | "starting" | "scanning" | "error">("idle");
+  const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) {
-      stop();
+      stopScanner();
       return;
     }
 
-    let cancelled = false;
-    setStatus("starting");
-    setError(null);
-
-    function stop() {
-      scanningRef.current = false;
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-      }
-      detectorRef.current = null;
-      setStatus("idle");
-    }
-
-    async function start() {
-      // Check if BarcodeDetector is supported
-      if (!window.BarcodeDetector) {
-        if (cancelled) return;
-        setError(
-          "Your browser does not support camera barcode scanning. Use a USB barcode scanner or type the barcode manually.",
-        );
-        setStatus("error");
-        return;
-      }
+    const startScanner = async () => {
+      if (!containerRef.current) return;
 
       try {
-        // Try to get the best camera
-        let stream: MediaStream;
-        try {
-          // First try: back camera with high resolution
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { 
-              facingMode: "environment", 
-              width: { ideal: 1920 }, 
-              height: { ideal: 1080 } 
-            },
-          });
-        } catch {
-          // Fallback: any camera
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" },
-          });
-        }
+        setIsScanning(true);
+        setError(null);
 
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
+        const scanner = new Html5Qrcode(containerRef.current.id);
 
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          // Wait for video to be ready
-          await new Promise((resolve) => {
-            if (videoRef.current?.readyState >= 2) {
-              resolve(true);
-            } else {
-              videoRef.current?.addEventListener('loadeddata', resolve, { once: true });
-            }
-          });
-        }
+        const config = {
+          fps: 15,
+          qrbox: { width: 280, height: 200 },
+          aspectRatio: 1.0,
+        };
 
-        // Create detector with all supported formats
-        detectorRef.current = new window.BarcodeDetector({
-          formats: [
-            "aztec",
-            "code_128",
-            "code_39",
-            "code_93",
-            "codabar",
-            "data_matrix",
-            "ean_13",
-            "ean_8",
-            "itf",
-            "pdf417",
-            "qr_code",
-            "upc_a",
-            "upc_e",
-          ],
-        });
-
-        setStatus("scanning");
-        scanningRef.current = true;
-        detectLoop();
-      } catch (err) {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Could not access the camera.");
-        setStatus("error");
-      }
-    }
-
-    async function detectLoop() {
-      if (!scanningRef.current || cancelled) return;
-      
-      const video = videoRef.current;
-      const detector = detectorRef.current;
-      
-      if (!video || !detector) {
-        requestAnimationFrame(detectLoop);
-        return;
-      }
-      
-      if (video.readyState < 2) {
-        requestAnimationFrame(detectLoop);
-        return;
-      }
-
-      try {
-        // Take a snapshot and detect
-        const results = await detector.detect(video);
-        
-        if (results && results.length > 0 && !cancelled) {
-          const barcode = results[0]?.rawValue;
-          if (barcode) {
-            console.log("✅ Barcode detected:", barcode);
-            scanningRef.current = false;
-            onScan(barcode);
-            stop();
-            return;
+        await scanner.start(
+          { facingMode: "environment" },
+          config,
+          (decodedText) => {
+            // ✅ Success callback - barcode detected!
+            console.log("✅ Barcode detected:", decodedText);
+            onScan(decodedText);
+            stopScanner();
+          },
+          (errorMessage) => {
+            // Ignore frame errors
           }
-        }
-      } catch (err) {
-        // Ignore frame errors - they happen between frames
-        console.debug("Detection error:", err);
+        );
+
+        scannerRef.current = scanner;
+      } catch (err: any) {
+        console.error("Error starting scanner:", err);
+        setError(err.message || "Failed to start camera. Please check permissions.");
+        setIsScanning(false);
       }
+    };
 
-      // Continue detection
-      requestAnimationFrame(detectLoop);
-    }
-
-    start();
+    // Start scanner after a small delay to ensure DOM is ready
+    const timeoutId = setTimeout(startScanner, 100);
 
     return () => {
-      cancelled = true;
-      stop();
+      clearTimeout(timeoutId);
+      stopScanner();
     };
   }, [open, onScan]);
+
+  const stopScanner = async () => {
+    try {
+      if (scannerRef.current) {
+        await scannerRef.current.stop();
+        await scannerRef.current.clear();
+        scannerRef.current = null;
+      }
+    } catch (err) {
+      console.error("Error stopping scanner:", err);
+    }
+    setIsScanning(false);
+  };
+
+  const toggleTorch = async () => {
+    try {
+      if (scannerRef.current) {
+        const newState = !torchOn;
+        await scannerRef.current.applyVideoConstraints({
+          advanced: [{ torch: newState }] as any,
+        });
+        setTorchOn(newState);
+      }
+    } catch (err) {
+      console.error("Error toggling torch:", err);
+    }
+  };
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/90 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
       <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-card p-5 shadow-panel">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Scan className="size-4 text-primary" />
-            <h3 className="text-[15px] font-semibold">Scan barcode</h3>
+            <h3 className="text-[15px] font-semibold text-white">Scan barcode</h3>
           </div>
           <button
             onClick={onClose}
@@ -197,54 +118,101 @@ export function BarcodeScanner({ open, onClose, onScan }: BarcodeScannerProps) {
         </div>
 
         <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-black">
-          <video 
-            ref={videoRef} 
-            className="size-full object-cover" 
-            muted 
-            playsInline 
-            autoPlay
-          />
-          
-          {status === "error" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-card p-6 text-center">
-              <p className="text-[13px] leading-relaxed text-muted-foreground">{error}</p>
-            </div>
-          )}
-          
-          {status === "starting" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-card">
-              <p className="text-[13px] text-muted-foreground">Starting camera…</p>
-            </div>
-          )}
-          
-          {/* Scan overlay - helps users align the barcode */}
+          {/* Scanner container */}
           <div
-            className={cn(
-              "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
-              status === "scanning" ? "opacity-100" : "opacity-0",
-            )}
-          >
-            <div className="relative">
-              <div className="border-2 border-primary/80 bg-primary/5 p-12 rounded-lg">
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-full h-0.5 bg-primary/50 animate-pulse" />
-                </div>
+            id="scanner-container"
+            ref={containerRef}
+            className="size-full"
+          />
+
+          {/* Loading overlay */}
+          {isScanning && !error && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto" />
+                <p className="text-white text-sm mt-2">Starting camera...</p>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center">
+              <p className="text-red-400 text-sm">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {/* Scan guide overlay */}
+          {!error && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="relative">
+                {/* Corner markers */}
+                <div className="absolute -top-0.5 -left-0.5 w-6 h-6 border-t-2 border-l-2 border-blue-400" />
+                <div className="absolute -top-0.5 -right-0.5 w-6 h-6 border-t-2 border-r-2 border-blue-400" />
+                <div className="absolute -bottom-0.5 -left-0.5 w-6 h-6 border-b-2 border-l-2 border-blue-400" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-6 h-6 border-b-2 border-r-2 border-blue-400" />
+                <div className="w-64 h-44 border-2 border-blue-400/30 rounded-lg" />
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex flex-col gap-3">
           <p className="text-[12px] text-muted-foreground text-center">
-            {status === "scanning" 
-              ? "📷 Position barcode in the center of the frame" 
-              : "Point the camera at a barcode. On a desktop, you can also plug in a USB scanner and scan directly into the search box."
+            {error 
+              ? "⚠️ Error occurred. Please try again." 
+              : "📷 Position barcode in the center of the frame"
             }
           </p>
-          <div className="flex justify-end">
-            <button className={cn(btn, "w-full sm:w-auto")} onClick={onClose}>
+
+          <div className="flex items-center justify-between gap-2">
+            {/* Torch toggle */}
+            <button
+              onClick={toggleTorch}
+              className={cn(
+                "px-3 py-2 rounded-lg border text-sm transition-colors",
+                torchOn 
+                  ? "bg-yellow-500/20 border-yellow-500 text-yellow-400" 
+                  : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+              )}
+            >
+              <Camera className="w-4 h-4 inline mr-1" />
+              {torchOn ? "Torch ON" : "Torch OFF"}
+            </button>
+
+            <button 
+              className={cn(btn, "bg-white/10 text-white hover:bg-white/20 border-white/20")} 
+              onClick={onClose}
+            >
               Cancel
             </button>
+          </div>
+
+          {/* Manual input fallback */}
+          <div className="mt-2">
+            <p className="text-[11px] text-muted-foreground text-center mb-1">
+              Or enter barcode manually:
+            </p>
+            <input
+              type="text"
+              placeholder="Type barcode number..."
+              className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const value = (e.target as HTMLInputElement).value.trim();
+                  if (value) {
+                    onScan(value);
+                    onClose();
+                  }
+                }
+              }}
+            />
           </div>
         </div>
       </div>
