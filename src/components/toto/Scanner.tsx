@@ -20,7 +20,6 @@ export function Scanner({ open, onClose, onScan, mode = "qr" }: ScannerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const label = mode === "qr" ? "QR Code" : "Barcode";
-  const Icon = QrCode; // use QR icon for both for simplicity
 
   useEffect(() => {
     if (!open) {
@@ -43,7 +42,6 @@ export function Scanner({ open, onClose, onScan, mode = "qr" }: ScannerProps) {
           aspectRatio: 1.0,
         };
 
-        // Both barcode and QR use the same detector
         await scanner.start(
           { facingMode: "environment" },
           config,
@@ -60,7 +58,7 @@ export function Scanner({ open, onClose, onScan, mode = "qr" }: ScannerProps) {
         scannerRef.current = scanner;
       } catch (err: any) {
         console.error("Error starting scanner:", err);
-        setError(err.message || "Failed to start camera. Please check permissions.");
+        setError(err.message || "Failed to start camera.");
         setIsScanning(false);
       }
     };
