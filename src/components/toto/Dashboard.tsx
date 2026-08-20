@@ -37,10 +37,15 @@ function DashboardInner() {
 
   const [shop, setShop] = useState<BranchId>("all");
   const [section, setSection] = useState<SectionId>("pos");
-  const { sales, returns, expenses, products } = useToto();
+  
+  // ✅ FIX: Add loading state from useToto
+  const { sales, returns, expenses, products, loading, error } = useToto();
 
   const effectiveShop: BranchId = isOwner ? shop : shop === "all" ? "toto" : shop;
-  const data = branches.find((b) => b.id === effectiveShop)!;
+  
+  // ✅ FIX: Add fallback if branch not found
+  const data = branches.find((b) => b.id === effectiveShop) || branches[0] || { id: "toto", name: "Totoz Empire" };
+  
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
   const activeSection: SectionId =
     isOwner || !navItems.find((n) => n.id === section)?.ownerOnly ? section : "pos";
@@ -109,6 +114,24 @@ function DashboardInner() {
     URL.revokeObjectURL(url);
     toast("Sales report exported");
   };
+
+  // ✅ FIX: Show loading state while data is loading
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // ✅ FIX: Show error if any
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-600">Error loading data: {error}</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen md:grid md:grid-cols-[240px_minmax(0,1fr)]">
@@ -207,7 +230,6 @@ function DashboardInner() {
 }
 
 // ⚠️ CRITICAL: THIS MUST BE THE VERY LAST LINE IN THE FILE
-// Named export - matches the import in the route file
 export function Dashboard() {
   return (
     <TotoStoreProvider>
