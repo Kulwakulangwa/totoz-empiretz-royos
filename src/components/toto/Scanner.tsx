@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Scan, X, Camera, Loader2, QrCode, Barcode } from "lucide-react";
+import { X, Camera, Loader2, QrCode, Barcode } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ScannerMode = "barcode" | "qr";
@@ -217,17 +217,11 @@ export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProp
           {status === "scanning" && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="relative">
-                {/* Corner markers */}
                 <div className="absolute -top-0.5 -left-0.5 w-8 h-8 border-t-2 border-l-2 border-blue-400" />
                 <div className="absolute -top-0.5 -right-0.5 w-8 h-8 border-t-2 border-r-2 border-blue-400" />
                 <div className="absolute -bottom-0.5 -left-0.5 w-8 h-8 border-b-2 border-l-2 border-blue-400" />
                 <div className="absolute -bottom-0.5 -right-0.5 w-8 h-8 border-b-2 border-r-2 border-blue-400" />
                 <div className="w-64 h-44 border-2 border-blue-400/30 rounded-lg" />
-                {/* Center crosshair */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-8 h-0.5 bg-blue-400/50" />
-                  <div className="w-0.5 h-8 bg-blue-400/50" />
-                </div>
               </div>
             </div>
           )}
@@ -244,7 +238,6 @@ export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProp
           </p>
 
           <div className="flex items-center justify-between gap-2">
-            {/* Torch toggle */}
             <button
               onClick={toggleTorch}
               className={cn(
@@ -266,7 +259,6 @@ export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProp
             </button>
           </div>
 
-          {/* Manual input fallback */}
           <div className="mt-2">
             <p className="text-[11px] text-muted-foreground text-center mb-1">
               Or enter manually:
