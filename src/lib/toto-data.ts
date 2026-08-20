@@ -13,6 +13,34 @@ export const branches: { id: BranchId; name: string }[] = [
 
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
+// ✅ money formatter - ADDED
+export const money = (amount: number) => {
+  return `TZS ${amount.toLocaleString("en-US")}`;
+};
+
+// ✅ Expense categories - ADDED
+export const expenseCategories = [
+  "Rent",
+  "Utilities",
+  "Salaries",
+  "Transport",
+  "Marketing",
+  "Supplies",
+  "Maintenance",
+  "Taxes",
+  "Insurance",
+  "Other",
+];
+
+// ✅ Reports configuration - ADDED
+export const reports = [
+  { id: "sales", label: "Sales Report" },
+  { id: "inventory", label: "Inventory Report" },
+  { id: "expenses", label: "Expenses Report" },
+  { id: "tax", label: "Tax Report" },
+  { id: "profit", label: "Profit & Loss" },
+];
+
 export type Product = {
   name: string;
   sku: string;
@@ -91,7 +119,6 @@ export const stockOf = (product: Product, branch: BranchId): number => {
 // ============================================
 
 // Map branch IDs to Supabase UUIDs
-// Update these with your actual UUIDs from Supabase
 export const BRANCH_UUID_MAP: Record<string, string> = {
   toto: "b25dbe78-c9a9-432e-9117-2fb152267c61",
   "totoz-empire": "b25dbe78-c9a9-432e-9117-2fb152267c61",
@@ -112,7 +139,6 @@ export function getBranchUuid(branchId: string): string {
 export function getBranchIdFromUuid(uuid: string): ShopId {
   for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
     if (value === uuid) {
-      // Check if key is a valid ShopId
       if (shopIds.includes(key as ShopId)) {
         return key as ShopId;
       }
