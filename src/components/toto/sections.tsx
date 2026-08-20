@@ -994,4 +994,593 @@ export function StaffSection() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["staff-accounts"] });
 
   const submit = async () => {
-    if (!form.name.trim
+    if (!form.name.trim()) {
+      toast("Enter the user's full name.");
+      return;
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
+      toast("Enter a valid login email.");
+      return;
+    }
+    if (form.password.length < 6) {
+      toast("Password must be at least 6 characters.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createStaffFn({
+        data: {
+          email: form.email.trim().toLowerCase(),
+          password: form.password,
+          fullName: form.name.trim(),
+          branch: form.branch,
+          role: form.role,
+        },
+      });
+      toast("Account created", {
+        description: `${form.email.trim().toLowerCase()} can now sign in.`,
+      });
+      setForm({ name: "", email: "", password: "", role: "cashier", branch: form.branch });
+      setOpen(false);
+      await refresh();
+    } catch (e) {
+      toast("Could not create the account", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (person: StaffAccount) => {
+    try {
+      await deleteStaffFn({ data: { id: person.id } });
+      toast("Account removed", { description: person.email });
+      await refresh();
+    } catch (e) {
+      toast("Could not remove the account", {
+        description: e instanceof Error ? e.message : "Please try again.",
+      });
+    }
+  };
+
+  return (
+    <Panel>
+      <PanelHead
+        title="Staff and access"
+        description="Create real login accounts. Cashiers only see point of sale and returns for their shop."
+      >
+        <button className={btnPrimary} onClick={() => setOpen(true)}>
+          Create account
+        </button>
+      </PanelHead>
+
+      {isLoading ? (
+        <p className="text-[13px] text-muted-foreground">Loading accounts…</p>
+      ) : error ? (
+        <p className="text-[13px] text-destructive">
+          Could not load accounts. Only the owner can manage staff.
+        </p>
+      ) : people.length ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {people.map((person) => (
+            <MiniCard
+              key={person.id}
+              title={`${person.fullName} · ${branchLabel(person.branch as BranchId)}`}
+              copy={person.email}
+              top={
+                <div className="flex items-center gap-2">
+                  <Pill tone={person.role === "owner" ? "ok" : "neutral"}>
+                    {person.role === "owner" ? "Owner" : "Cashier"}
+                  </Pill>
+                  <button
+                    className="text-[12px] text-muted-foreground hover:text-destructive"
+                    onClick={() => remove(person)}
+                  >
+                    Remove
+                  </button>
+                </div>
+              }
+            />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="No accounts yet"
+          copy="Create cashier accounts with an email and password so they can sign in on the shop device."
+        />
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create login account</DialogTitle>
+            <DialogDescription>
+              The cashier signs in with this email and password at the login screen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Field label="Full name">
+              <input
+                className={field}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </Field>
+            <Field label="Login email">
+              <input
+                className={field}
+                type="email"
+                autoComplete="off"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="cashier@totoempire.co.tz"
+              />
+            </Field>
+            <Field label="Temporary password">
+              <input
+                className={field}
+                type="text"
+                autoComplete="new-password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="At least 6 characters"
+              />
+            </Field>
+            <Field label="Role">
+              <select
+                className={field}
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value as "owner" | "cashier" })}
+              >
+                <option value="cashier">Cashier</option>
+                <option value="owner">Owner</option>
+              </select>
+            </Field>
+            <Field label="Assigned shop">
+              <select
+                className={field}
+                value={form.branch}
+                onChange={(e) => setForm({ ...form, branch: e.target.value as ShopId })}
+              >
+                {realBranches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <DialogFooter>
+            <button className={btn} onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+            <button className={btnPrimary} onClick={submit} disabled={saving}>
+              {saving ? "Creating…" : "Create account"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Panel>
+  );
+}
+
+/* ---------------- Reports ---------------- */
+
+export function ReportsSection({ shop }: { shop: BranchId }) {
+  const store = useToto();
+  const scope = <T extends { branch: BranchId }>(rows: T[]) =>
+    rows.filter((r) => shop === "all" || r.branch === shop);
+  const sales = scope(store.sales);
+  const expenses = scope(store.expenses);
+  const products = store.products;
+  const returns = scope(store.returns);
+  const [openReport, setOpenReport] = useState<string | null>(null);
+
+  const revenue = sales.reduce((s, x) => s + x.total, 0);
+  const cost = sales.reduce((s, x) => s + x.cost, 0);
+  const spend = expenses.reduce((s, x) => s + x.amount, 0);
+  const cash = sales.filter((s) => s.payment === "Cash").reduce((s, x) => s + x.total, 0);
+  const lipa = revenue - cash;
+  const lowStock = products.filter((p) => stockOf(p, shop) <= p.min);
+
+  const summaries: Record<string, { label: string; value: string }[]> = {
+    "Sales report": [
+      { label: "Receipts", value: String(sales.length) },
+      { label: "Revenue", value: money(revenue) },
+      { label: "Gross profit", value: money(revenue - cost) },
+    ],
+    "Payment report": [
+      { label: "Cash", value: money(cash) },
+      { label: "Lipa Namba", value: money(lipa) },
+    ],
+    "Product sales": Object.entries(
+      sales
+        .flatMap((s) => s.lines)
+        .reduce<Record<string, number>>((acc, l) => {
+          acc[l.name] = (acc[l.name] ?? 0) + l.qty;
+          return acc;
+        }, {}),
+    ).map(([name, qty]) => ({ label: name, value: `${qty} sold` })),
+    "Inventory report": products.map((p) => ({
+      label: `${p.name} · ${p.sku}`,
+      value: `${stockOf(p, shop)} in stock`,
+    })),
+    "Low-stock report": lowStock.map((p) => ({
+      label: `${p.name} · ${p.sku}`,
+      value: `${stockOf(p, shop)} / min ${p.min}`,
+    })),
+    "Expense report": Object.entries(
+      expenses.reduce<Record<string, number>>((acc, e) => {
+        acc[e.category] = (acc[e.category] ?? 0) + e.amount;
+        return acc;
+      }, {}),
+    ).map(([category, amount]) => ({ label: category, value: money(amount) })),
+    "Branch performance": realBranches.map((b) => {
+      const bs = sales.filter((s) => s.branch === b.id);
+      const bRev = bs.reduce((s, x) => s + x.total, 0);
+      const bCost = bs.reduce((s, x) => s + x.cost, 0);
+      const bSpend = expenses.filter((e) => e.branch === b.id).reduce((s, e) => s + e.amount, 0);
+      return { label: b.name, value: `${money(bRev)} · profit ${money(bRev - bCost - bSpend)}` };
+    }),
+    "VAT report": [
+      { label: "Output VAT on sales", value: money(sales.reduce((a, x) => a + x.vat, 0)) },
+      { label: "VAT credited on returns", value: money(returns.reduce((a, x) => a + x.vat, 0)) },
+      {
+        label: "Net VAT payable",
+        value: money(sales.reduce((a, x) => a + x.vat, 0) - returns.reduce((a, x) => a + x.vat, 0)),
+      },
+    ],
+    "Returns report": returns.map((r) => ({
+      label: `CN-${String(r.creditNote).padStart(4, "0")} · ${branchLabel(r.branch)} · ${r.reason}`,
+      value: money(r.total),
+    })),
+    "Audit history": sales.map((s) => ({
+      label: `#${String(s.receipt).padStart(4, "0")} · ${branchLabel(s.branch)} · ${s.date}`,
+      value: `${s.payment} · ${money(s.total)}`,
+    })),
+  };
+
+  const rows = openReport ? (summaries[openReport] ?? []) : [];
+
+  return (
+    <Panel>
+      <PanelHead
+        title="Reports"
+        description={`Revenue ${money(revenue)} · expenses ${money(spend)} · net ${money(revenue - cost - spend)}.`}
+      />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {reports.map((report) => (
+          <button
+            key={report.title}
+            className="text-left"
+            onClick={() => setOpenReport(report.title)}
+          >
+            <MiniCard title={report.title} copy={report.copy} />
+          </button>
+        ))}
+      </div>
+
+      <Dialog open={!!openReport} onOpenChange={(v) => !v && setOpenReport(null)}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{openReport}</DialogTitle>
+            <DialogDescription>
+              Generated from recorded sales, stock and expenses.
+            </DialogDescription>
+          </DialogHeader>
+          {rows.length ? (
+            <div className="grid gap-2">
+              {rows.map((r, i) => (
+                <div
+                  key={r.label + i}
+                  className="flex items-center justify-between gap-3 border-b border-border/60 py-2 text-[13px] last:border-0"
+                >
+                  <span>{r.label}</span>
+                  <span className="font-mono">{r.value}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-[13px] text-muted-foreground">
+              No data for this report yet.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Panel>
+  );
+}
+
+/* ---------------- Returns ---------------- */
+
+export function ReturnsSection({
+  shop,
+  cashier,
+  isOwner,
+}: {
+  shop: BranchId;
+  cashier: string;
+  isOwner: boolean;
+}) {
+  const { sales, returns, recordReturn } = useToto();
+  const [query, setQuery] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [qty, setQty] = useState<Record<string, number>>({});
+  const [reason, setReason] = useState("Customer return");
+  const [restock, setRestock] = useState(true);
+
+  const scoped = sales.filter((s) => shop === "all" || s.branch === shop);
+  const q = query.trim().toLowerCase();
+  const matches = scoped.filter(
+    (s) =>
+      !q || String(s.receipt).padStart(4, "0").includes(q) || s.cashier.toLowerCase().includes(q),
+  );
+  const sale = sales.find((s) => s.id === openId) ?? null;
+
+  function open(id: string) {
+    const target = sales.find((s) => s.id === id);
+    setOpenId(id);
+    setQty(Object.fromEntries((target?.lines ?? []).map((l) => [l.sku, 0])));
+    setReason("Customer return");
+    setRestock(true);
+  }
+
+  function submit() {
+    if (!sale) return;
+    const lines = sale.lines
+      .map((l) => ({ ...l, qty: Math.min(qty[l.sku] ?? 0, l.qty) }))
+      .filter((l) => l.qty > 0);
+    if (!lines.length) {
+      toast("Select at least one item to return.");
+      return;
+    }
+    const entry = recordReturn({ saleId: sale.id, cashier, reason, restock, lines });
+    if (!entry) {
+      toast("Could not record this return.");
+      return;
+    }
+    toast(`Credit note CN-${String(entry.creditNote).padStart(4, "0")} issued`, {
+      description: `${money(entry.total)} refunded${restock ? " · items restocked" : ""}`,
+    });
+    setOpenId(null);
+  }
+
+  return (
+    <div className="grid gap-5">
+      <Panel>
+        <PanelHead
+          title="Returns and credit notes"
+          description="Find a receipt, pick the items coming back and issue a credit note."
+        />
+        <input
+          className={field}
+          placeholder="Search by receipt number or cashier"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {matches.length ? (
+          <div className="mt-3 grid gap-2">
+            {matches.slice(0, 30).map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border p-3"
+              >
+                <div>
+                  <div className="text-[13px] font-medium">
+                    #{String(s.receipt).padStart(4, "0")} · {branchLabel(s.branch)}
+                  </div>
+                  <div className="text-[12px] text-muted-foreground">
+                    {s.date} · {s.cashier} · {s.payment}
+                    {s.returned ? ` · ${s.returned} item(s) returned` : ""}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-[13px]">{money(s.total)}</span>
+                  <button className={btn} onClick={() => open(s.id)}>
+                    Return
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3">
+            <EmptyState
+              title="No receipts found"
+              copy="Sales recorded at the point of sale appear here so you can refund them."
+            />
+          </div>
+        )}
+      </Panel>
+
+      {isOwner && (
+        <Panel>
+          <PanelHead title="Credit notes issued" description="Every refund with its reason." />
+          {returns.length ? (
+            <div className="grid gap-2">
+              {returns.map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center justify-between gap-3 border-b border-border/60 py-2.5 text-[13px] last:border-0"
+                >
+                  <div>
+                    <div className="font-medium">
+                      CN-{String(r.creditNote).padStart(4, "0")} · receipt #
+                      {String(r.receipt).padStart(4, "0")}
+                    </div>
+                    <div className="text-[12px] text-muted-foreground">
+                      {r.date} · {branchLabel(r.branch)} · {r.reason}
+                      {r.restock ? " · restocked" : ""}
+                    </div>
+                  </div>
+                  <span className="font-mono">-{money(r.total)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="No returns yet" copy="Credit notes will be listed here." />
+          )}
+        </Panel>
+      )}
+
+      <Dialog open={!!sale} onOpenChange={(v) => !v && setOpenId(null)}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Return items · receipt #{sale ? String(sale.receipt).padStart(4, "0") : ""}
+            </DialogTitle>
+            <DialogDescription>
+              Choose how many units of each line are coming back.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            {sale?.lines.map((l) => (
+              <div key={l.sku} className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[13px] font-medium">{l.name}</div>
+                  <div className="text-[12px] text-muted-foreground">
+                    sold {l.qty} · {money(l.sell)}
+                  </div>
+                </div>
+                <input
+                  className={cn(field, "w-20")}
+                  type="number"
+                  min={0}
+                  max={l.qty}
+                  value={qty[l.sku] ?? 0}
+                  onChange={(e) =>
+                    setQty((prev) => ({
+                      ...prev,
+                      [l.sku]: Math.max(0, Math.min(l.qty, Number(e.target.value) || 0)),
+                    }))
+                  }
+                />
+              </div>
+            ))}
+            <Field label="Reason">
+              <input className={field} value={reason} onChange={(e) => setReason(e.target.value)} />
+            </Field>
+            <label className="flex items-center gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={restock}
+                onChange={(e) => setRestock(e.target.checked)}
+              />
+              Put returned items back into stock
+            </label>
+          </div>
+          <DialogFooter>
+            <button className={btn} onClick={() => setOpenId(null)}>
+              Cancel
+            </button>
+            <button className={btnPrimary} onClick={submit}>
+              Issue credit note
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* ---------------- VAT / EFD settings ---------------- */
+
+export function SettingsSection() {
+  const { settings, updateSettings } = useToto();
+  const [form, setForm] = useState(settings);
+
+  const set = (patch: Partial<typeof form>) => setForm((prev) => ({ ...prev, ...patch }));
+
+  return (
+    <Panel>
+      <PanelHead
+        title="VAT and EFD receipt details"
+        description="These details print on every receipt. Prices are treated as VAT inclusive."
+      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Business name">
+          <input
+            className={field}
+            value={form.businessName}
+            onChange={(e) => set({ businessName: e.target.value })}
+          />
+        </Field>
+        <Field label="Address">
+          <input
+            className={field}
+            value={form.address}
+            onChange={(e) => set({ address: e.target.value })}
+          />
+        </Field>
+        <Field label="Phone">
+          <input
+            className={field}
+            value={form.phone}
+            onChange={(e) => set({ phone: e.target.value })}
+          />
+        </Field>
+        <Field label="TIN">
+          <input
+            className={field}
+            value={form.tin}
+            onChange={(e) => set({ tin: e.target.value })}
+          />
+        </Field>
+        <Field label="VRN">
+          <input
+            className={field}
+            value={form.vrn}
+            onChange={(e) => set({ vrn: e.target.value })}
+          />
+        </Field>
+        <Field label="EFD serial">
+          <input
+            className={field}
+            value={form.efdSerial}
+            onChange={(e) => set({ efdSerial: e.target.value })}
+          />
+        </Field>
+        <Field label="VAT rate (%)">
+          <input
+            className={field}
+            type="number"
+            min={0}
+            max={30}
+            value={form.vatRate}
+            onChange={(e) => set({ vatRate: Number(e.target.value) || 0 })}
+          />
+        </Field>
+        <Field label="Receipt footer">
+          <input
+            className={field}
+            value={form.receiptFooter}
+            onChange={(e) => set({ receiptFooter: e.target.value })}
+          />
+        </Field>
+      </div>
+      <label className="mt-3 flex items-center gap-2 text-[13px]">
+        <input
+          type="checkbox"
+          checked={form.vatEnabled}
+          onChange={(e) => set({ vatEnabled: e.target.checked })}
+        />
+        Charge VAT on sales (prices are VAT inclusive)
+      </label>
+      <div className="mt-4 flex gap-2">
+        <button
+          className={btnPrimary}
+          onClick={() => {
+            updateSettings(form);
+            toast("VAT / EFD settings saved");
+          }}
+        >
+          Save settings
+        </button>
+        <button className={btn} onClick={() => setForm(settings)}>
+          Reset
+        </button>
+      </div>
+    </Panel>
+  );
+}
