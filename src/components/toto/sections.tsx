@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Panel, PanelHead, Pill, EmptyState, MiniCard } from "./primitives";
+import { Scanner } from "./Scanner";
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,7 @@ import {
   type ShopId,
 } from "@/lib/toto-data";
 import { branchLabel, useToto, type SaleLine } from "@/lib/toto-store";
-import { Scan } from "lucide-react";
+import { Scan, QrCode } from "lucide-react";
 
 export const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -131,6 +132,8 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [pay, setPay] = useState<"Cash" | "Lipa Namba">("Cash");
+  const [scanningBarcode, setScanningBarcode] = useState(false);
+  const [scanningQR, setScanningQR] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const activeBranch: ShopId = shop === "all" ? "toto" : shop;
@@ -215,6 +218,30 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
     focusInput();
   }
 
+  function handleScan(data: string) {
+    setScanningBarcode(false);
+    setScanningQR(false);
+    const clean = data.trim().toLowerCase();
+    if (!clean) return;
+
+    const match = available.find(
+      (p) =>
+        p.barcode.toLowerCase() === clean ||
+        p.sku.toLowerCase() === clean ||
+        p.name.toLowerCase() === clean,
+    );
+
+    if (!match) {
+      toast("No product matches scanned data", { description: data });
+      setQuery(data);
+      focusInput();
+      return;
+    }
+    addItem(match, "scan");
+    setQuery("");
+    focusInput();
+  }
+
   function step(sku: string, delta: number) {
     setCart((prev) =>
       prev
@@ -238,19 +265,27 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
       <Panel>
         <PanelHead title="Point of sale" description={`Assigned shop: ${assigned}`} />
-        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
           <div className="relative">
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
-              placeholder="Scan barcode or search product"
+              placeholder="Scan barcode, QR code or search product"
               className="min-h-10 w-full rounded-md border border-border bg-card px-3 pr-9 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
               autoFocus
             />
             <Scan className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
           </div>
+          <button className={btn} onClick={() => setScanningBarcode(true)} aria-label="Scan barcode">
+            <Scan className="size-4" />
+            <span className="hidden sm:inline">Barcode</span>
+          </button>
+          <button className={btn} onClick={() => setScanningQR(true)} aria-label="Scan QR code">
+            <QrCode className="size-4" />
+            <span className="hidden sm:inline">QR Code</span>
+          </button>
           <button className={btnPrimary} onClick={() => add()}>
             Add item
           </button>
@@ -381,6 +416,22 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
           method.
         </p>
       </Panel>
+
+      {/* Barcode Scanner */}
+      <Scanner
+        open={scanningBarcode}
+        onClose={() => setScanningBarcode(false)}
+        onScan={handleScan}
+        mode="barcode"
+      />
+
+      {/* QR Code Scanner */}
+      <Scanner
+        open={scanningQR}
+        onClose={() => setScanningQR(false)}
+        onScan={handleScan}
+        mode="qr"
+      />
     </div>
   );
 }
