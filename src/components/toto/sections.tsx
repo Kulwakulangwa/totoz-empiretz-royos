@@ -998,9 +998,4 @@ export function StaffSection() {
       toast("Enter the user's full name.");
       return;
     }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) {
-      toast("Enter a valid login email.");
-      return;
-    }
-    if (form.password.length < 6) {
-      toast("Password must be at least
+    if (!/^[^@\s]+@[^
