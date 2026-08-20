@@ -994,8 +994,4 @@ export function StaffSection() {
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["staff-accounts"] });
 
   const submit = async () => {
-    if (!form.name.trim()) {
-      toast("Enter the user's full name.");
-      return;
-    }
-    if (!/^[^@\s]+@[^
+    if (!form.name.trim
