@@ -106,8 +106,6 @@ type State = {
   receipt: number;
   creditNote: number;
   settings: TaxSettings;
-  loading: boolean;
-  error: string | null;
 };
 
 const EMPTY: State = {
@@ -120,8 +118,6 @@ const EMPTY: State = {
   receipt: 1,
   creditNote: 1,
   settings: defaultTaxSettings,
-  loading: true,
-  error: null,
 };
 
 type Ctx = State & {
@@ -147,7 +143,7 @@ type Ctx = State & {
   }) => Promise<SaleReturn | undefined>;
   updateSettings: (patch: Partial<TaxSettings>) => Promise<void>;
   addExpense: (e: Expense) => Promise<void>;
-  removeExpense: (index: number) => Promise<void>;
+  removeExpense: (id: string) => Promise<void>;
   addStaff: (s: Staff) => Promise<void>;
   removeStaff: (name: string) => Promise<void>;
   resetAll: () => void;
@@ -164,14 +160,13 @@ const timeLabel = () =>
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
 const norm = (v: string) => v.trim().toLowerCase();
-const INTERNAL_BARCODE_START_NUM = 1000000;
 
 function nextInternalBarcode(products: Product[]): string {
   const used = new Set(products.map((p) => p.barcode));
-  let candidate = INTERNAL_BARCODE_START_NUM;
+  let candidate = INTERNAL_BARCODE_START;
   for (const p of products) {
     const n = Number(p.barcode);
-    if (Number.isSafeInteger(n) && n >= INTERNAL_BARCODE_START_NUM && n >= candidate) {
+    if (Number.isSafeInteger(n) && n >= INTERNAL_BARCODE_START && n >= candidate) {
       candidate = n + 1;
     }
   }
@@ -211,13 +206,13 @@ const cleanStock = (stock: Partial<Record<ShopId, number>>) => {
 };
 
 export function TotoStoreProvider({ children }: { children: ReactNode }) {
-  const { user, role, branchId } = useAuth();
-  const [state, setState] = useState<State>({ ...EMPTY, loading: true });
+  const { user, role, staffProfile } = useAuth();
+  const [state, setState] = useState<State>(EMPTY);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const ref = useRef<State>({ ...EMPTY, loading: true });
+  const ref = useRef<State>(EMPTY);
+  const [hydrated, setHydrated] = useState(false);
 
-  // Sync local state with ref
   useEffect(() => {
     ref.current = state;
   }, [state]);
@@ -229,10 +224,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  const log = (title: string, desc: string) => (prev: State): State => ({
+    ...prev,
+    activities: [{ title, desc, time: `${today()} ${timeLabel()}` }, ...prev.activities].slice(0, 40),
+  });
+
   // Load data from Supabase
   const refreshData = useCallback(async () => {
     if (!user) {
-      setState({ ...EMPTY, loading: false });
       setLoading(false);
       return;
     }
@@ -242,62 +241,80 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
     try {
       const isOwner = role === "owner";
-      const branchFilter = isOwner ? undefined : branchId;
+      const userBranch = staffProfile?.branch_id;
 
       // Fetch products
-      let productsQuery = supabase.from('products').select('*');
-      if (branchFilter) {
-        productsQuery = productsQuery.eq('branch_id', branchFilter);
+      let productsQuery = supabase
+        .from('products')
+        .select('*');
+
+      if (!isOwner && userBranch) {
+        productsQuery = productsQuery.eq('branch_id', userBranch);
       }
+
       const { data: productsData, error: productsError } = await productsQuery;
       if (productsError) throw productsError;
 
-      // Map products to local format
+      // Map to local format
       const mappedProducts: Product[] = (productsData || []).map(p => ({
         name: p.name,
         sku: p.sku,
         barcode: p.barcode || '',
         category: p.category || 'General',
-        buy: p.buying_price || 0,
-        sell: p.selling_price || 0,
-        min: p.min_stock || 5,
-        stock: { [p.branch_id]: p.quantity || 0 } as Partial<Record<ShopId, number>>,
+        buy: Number(p.buying_price) || 0,
+        sell: Number(p.selling_price) || 0,
+        min: Number(p.min_stock) || 5,
+        stock: { [p.branch_id]: Number(p.quantity) || 0 } as Partial<Record<ShopId, number>>,
       }));
 
-      // Fetch sales
+      // Fetch sales with items
       let salesQuery = supabase
         .from('sales')
-        .select('*, sale_items(*)');
-      if (branchFilter) {
-        salesQuery = salesQuery.eq('branch_id', branchFilter);
+        .select(`
+          *,
+          sale_items(*)
+        `);
+
+      if (!isOwner && userBranch) {
+        salesQuery = salesQuery.eq('branch_id', userBranch);
       }
+
       const { data: salesData, error: salesError } = await salesQuery.order('created_at', { ascending: false });
       if (salesError) throw salesError;
 
-      const mappedSales: Sale[] = (salesData || []).map(s => ({
-        id: s.id,
-        receipt: parseInt(s.receipt_number?.replace('REC-', '') || '1'),
-        date: s.created_at?.split('T')[0] || today(),
-        branch: s.branch_id as BranchId,
-        cashier: s.cashier_id || 'Unknown',
-        payment: s.payment_method as "Cash" | "Lipa Namba",
-        lines: (s.sale_items || []).map((item: any) => ({
+      const mappedSales: Sale[] = (salesData || []).map(s => {
+        const items = s.sale_items || [];
+        const lines: SaleLine[] = items.map((item: any) => ({
           sku: item.sku || '',
           name: item.product_name,
           qty: item.quantity || 0,
-          sell: item.unit_price || 0,
-          buy: item.unit_price * 0.7 || 0,
-        })),
-        total: s.total || 0,
-        cost: s.subtotal || 0,
-        vat: s.tax || 0,
-      }));
+          sell: Number(item.unit_price) || 0,
+          buy: Number(item.unit_price) * 0.7 || 0, // Approximate cost
+        }));
+
+        return {
+          id: s.id,
+          receipt: parseInt(s.receipt_number?.replace('REC-', '') || '1'),
+          date: s.created_at?.split('T')[0] || today(),
+          branch: s.branch_id as BranchId,
+          cashier: s.cashier_id || 'Unknown',
+          payment: (s.payment_method as "Cash" | "Lipa Namba") || 'Cash',
+          lines,
+          total: Number(s.total) || 0,
+          cost: Number(s.subtotal) || 0,
+          vat: Number(s.tax) || 0,
+        };
+      });
 
       // Fetch expenses
-      let expensesQuery = supabase.from('expenses').select('*');
-      if (branchFilter) {
-        expensesQuery = expensesQuery.eq('branch_id', branchFilter);
+      let expensesQuery = supabase
+        .from('expenses')
+        .select('*');
+
+      if (!isOwner && userBranch) {
+        expensesQuery = expensesQuery.eq('branch_id', userBranch);
       }
+
       const { data: expensesData, error: expensesError } = await expensesQuery.order('expense_date', { ascending: false });
       if (expensesError) throw expensesError;
 
@@ -307,7 +324,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         branch: e.branch_id as BranchId,
         category: e.category,
         description: e.description || '',
-        amount: e.amount,
+        amount: Number(e.amount) || 0,
         note: e.description || '',
       }));
 
@@ -323,8 +340,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         receipt: mappedSales.length > 0 ? Math.max(...mappedSales.map(s => s.receipt)) + 1 : 1,
         creditNote: 1,
         settings: defaultTaxSettings,
-        loading: false,
-        error: null,
       };
 
       ref.current = newState;
@@ -337,32 +352,29 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       setError(err.message);
       setLoading(false);
     }
-  }, [user, role, branchId]);
+  }, [user, role, staffProfile]);
 
-  // Load data when user changes
+  // Load data on mount and when user changes
   useEffect(() => {
     if (user) {
       refreshData();
     } else {
-      setState({ ...EMPTY, loading: false });
+      setState(EMPTY);
       setLoading(false);
     }
+    setHydrated(true);
   }, [user, refreshData]);
-
-  // Log activity
-  const log = (title: string, desc: string) => (prev: State): State => ({
-    ...prev,
-    activities: [{ title, desc, time: `${today()} ${timeLabel()}` }, ...prev.activities].slice(0, 40),
-  });
-
-  const stockSummary = (stock: Partial<Record<ShopId, number>>) =>
-    shopIds
-      .filter((id) => (stock[id] ?? 0) > 0)
-      .map((id) => `${branchLabel(id)} ${stock[id]}`)
-      .join(", ") || "no stock yet";
 
   const nextBarcode = useCallback(() => nextInternalBarcode(ref.current.products), []);
   const suggestSku = useCallback((name: string) => nextSku(ref.current.products, name), []);
+
+  const findByCode = useCallback((code: string, branch: BranchId) => {
+    const q = norm(code);
+    if (!q) return undefined;
+    const match = state.products.find((p) => norm(p.barcode) === q || norm(p.sku) === q);
+    if (!match) return undefined;
+    return branch === "all" || stockOf(match, branch) >= 0 ? match : undefined;
+  }, [state.products]);
 
   // Add product to Supabase
   const addProduct = useCallback(async (input: ProductInput): Promise<SaveResult> => {
@@ -448,7 +460,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
       commit(log("Product updated", `${name} · ${sku}`));
       await refreshData();
-      return { ok: true, product: ref.current.products.find(p => p.sku === sku)! };
+      const product = ref.current.products.find(p => p.sku === sku);
+      return { ok: true, product: product! };
     } catch (err: any) {
       return { ok: false, error: err.message };
     }
@@ -497,14 +510,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  const findByCode = useCallback((code: string, branch: BranchId) => {
-    const q = norm(code);
-    if (!q) return undefined;
-    const match = state.products.find((p) => norm(p.barcode) === q || norm(p.sku) === q);
-    if (!match) return undefined;
-    return branch === "all" || stockOf(match, branch) >= 0 ? match : undefined;
-  }, [state.products]);
-
   // Record sale
   const recordSale = useCallback(async (input: {
     branch: BranchId;
@@ -536,7 +541,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
       if (saleError) throw saleError;
 
-      // Insert sale items
+      // Insert sale items and update inventory
       for (const line of input.lines) {
         const { error: itemError } = await supabase
           .from('sale_items')
@@ -669,6 +674,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           description: e.description,
           amount: e.amount,
           expense_date: e.date || today(),
+          created_by: e.created_by || null,
         });
 
       if (error) throw error;
@@ -680,30 +686,30 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  const removeExpense = useCallback(async (index: number) => {
-    // Since we're using Supabase, we need to find the expense by ID
-    const expense = ref.current.expenses[index];
-    if (expense?.id) {
-      try {
-        await supabase.from('expenses').delete().eq('id', expense.id);
-        commit((prev) => ({ ...prev, expenses: prev.expenses.filter((_, i) => i !== index) }));
-        await refreshData();
-      } catch (err) {
-        console.error('Error removing expense:', err);
-      }
+  // Remove expense
+  const removeExpense = useCallback(async (id: string) => {
+    try {
+      await supabase.from('expenses').delete().eq('id', id);
+      commit((prev) => ({ ...prev, expenses: prev.expenses.filter(e => e.id !== id) }));
+      await refreshData();
+    } catch (err) {
+      console.error('Error removing expense:', err);
     }
   }, [commit, refreshData]);
 
+  // Add staff (placeholder - will integrate with auth)
   const addStaff = useCallback(async (s: Staff) => {
-    // TODO: Implement staff creation with Supabase Auth
     console.log('Add staff:', s);
+    // TODO: Implement with Supabase Auth
   }, []);
 
+  // Remove staff (placeholder)
   const removeStaff = useCallback(async (name: string) => {
-    // TODO: Implement staff removal with Supabase Auth
     console.log('Remove staff:', name);
+    // TODO: Implement with Supabase Auth
   }, []);
 
+  // Update settings
   const updateSettings = useCallback(async (patch: Partial<TaxSettings>) => {
     commit((prev) => log("Tax settings updated", "VAT / EFD receipt details changed")({
       ...prev,
@@ -711,8 +717,9 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }));
   }, [commit]);
 
+  // Reset all (clear local state only)
   const resetAll = useCallback(() => {
-    commit(() => ({ ...EMPTY, loading: false }));
+    commit(() => ({ ...EMPTY }));
   }, [commit]);
 
   const value = useMemo<Ctx>(() => ({
