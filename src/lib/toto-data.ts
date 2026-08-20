@@ -1,43 +1,22 @@
-export type BranchId = "all" | "toto" | "sunnozy1" | "sunnozy2" | "mimis" | "marc";
-export type ShopId = Exclude<BranchId, "all">;
+export type ShopId = "toto" | "sunnozy-1" | "sunnozy-2" | "mimis" | "marc-urembo";
+export type BranchId = ShopId | "all";
 
-export type Branch = {
-  id: BranchId;
-  name: string;
-  sub: string;
-};
+export const shopIds: ShopId[] = ["toto", "sunnozy-1", "sunnozy-2", "mimis", "marc-urembo"];
 
-export const branches: Branch[] = [
-  { id: "all", name: "All shops", sub: "Consolidated view" },
-  { id: "toto", name: "Totoz Empire", sub: "Baby and kids" },
-  { id: "sunnozy1", name: "Sunnozy-1", sub: "Toys and clothes" },
-  { id: "sunnozy2", name: "Sunnozy-2", sub: "Baby products" },
-  { id: "mimis", name: "Mimis", sub: "Clothes and toys" },
-  { id: "marc", name: "Marc Urembo", sub: "Jewellery shop" },
+export const branches: { id: BranchId; name: string }[] = [
+  { id: "toto", name: "Totoz Empire" },
+  { id: "sunnozy-1", name: "Sunnozy-1" },
+  { id: "sunnozy-2", name: "Sunnozy-2" },
+  { id: "mimis", name: "Mimis" },
+  { id: "marc-urembo", name: "Marc Urembo" },
 ];
 
-export type SectionId =
-  "overview" | "pos" | "inventory" | "returns" | "expenses" | "staff" | "reports" | "settings";
+export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
-export const navItems: { id: SectionId; label: string; ownerOnly: boolean }[] = [
-  { id: "overview", label: "Overview", ownerOnly: true },
-  { id: "pos", label: "Point of sale", ownerOnly: false },
-  { id: "returns", label: "Returns", ownerOnly: false },
-  { id: "inventory", label: "Inventory", ownerOnly: true },
-  { id: "expenses", label: "Expenses", ownerOnly: true },
-  { id: "staff", label: "Staff", ownerOnly: true },
-  { id: "reports", label: "Reports", ownerOnly: true },
-  { id: "settings", label: "VAT / EFD", ownerOnly: true },
-];
-
-/**
- * A product has ONE global identity (sku + barcode) for the whole business.
- * Stock is held per shop in `stock`; the same product can live in many shops.
- */
 export type Product = {
+  name: string;
   sku: string;
   barcode: string;
-  name: string;
   category: string;
   buy: number;
   sell: number;
@@ -45,78 +24,121 @@ export type Product = {
   stock: Partial<Record<ShopId, number>>;
 };
 
-export const shopIds: ShopId[] = ["toto", "sunnozy1", "sunnozy2", "mimis", "marc"];
-
-export const totalStock = (p: Product) =>
-  shopIds.reduce((sum, id) => sum + (p.stock[id] ?? 0), 0);
-
-export const stockOf = (p: Product, branch: BranchId) =>
-  branch === "all" ? totalStock(p) : (p.stock[branch] ?? 0);
-
-/** Internal (self-generated) barcodes live in the 2000000xxxxx range. */
-export const INTERNAL_BARCODE_PREFIX = "2";
-export const INTERNAL_BARCODE_START = 200000000001;
-
-export const products: Product[] = [];
-
-export type Activity = { title: string; desc: string; time: string };
-
-export const activities: Activity[] = [];
+export type Staff = {
+  name: string;
+  role: "owner" | "cashier";
+  branch: BranchId;
+  password?: string;
+};
 
 export type Expense = {
+  id: string;
   date: string;
   branch: BranchId;
   category: string;
   description: string;
   amount: number;
+  note?: string;
+  created_by?: string;
 };
 
-export const expenses: Expense[] = [];
+export type Activity = {
+  title: string;
+  desc: string;
+  time: string;
+};
 
-export const expenseCategories = [
-  "Rent",
-  "Utilities",
-  "Internet",
-  "Transport",
-  "Packaging",
-  "Repairs",
-  "Cleaning",
-  "Other",
+export type NavItem = {
+  id: SectionId;
+  label: string;
+  ownerOnly: boolean;
+  icon?: string;
+};
+
+export type SectionId =
+  | "overview"
+  | "pos"
+  | "returns"
+  | "inventory"
+  | "expenses"
+  | "staff"
+  | "reports"
+  | "settings"
+  | "vat";
+
+export const navItems: NavItem[] = [
+  { id: "overview", label: "Overview", ownerOnly: true, icon: "📊" },
+  { id: "pos", label: "Point of sale", ownerOnly: false, icon: "🛍️" },
+  { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
+  { id: "inventory", label: "Inventory", ownerOnly: true, icon: "📦" },
+  { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
+  { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
+  { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
+  { id: "vat", label: "VAT / EFD", ownerOnly: true, icon: "🧾" },
 ];
 
-export type Staff = { role: "Owner" | "Cashier"; name: string; branch: BranchId; detail: string };
+export const INTERNAL_BARCODE_START = 1000000;
 
-export const staff: Staff[] = [];
+export const stockOf = (product: Product, branch: BranchId): number => {
+  if (branch === "all") {
+    return shopIds.reduce((sum, id) => sum + (product.stock[id] ?? 0), 0);
+  }
+  return product.stock[branch] ?? 0;
+};
 
-export const reports = [
-  {
-    title: "Sales report",
-    copy: "Sales by date, shop and cashier with receipt-level traceability.",
-  },
-  { title: "Payment report", copy: "Cash and Lipa Namba split for every shop and period." },
-  { title: "Product sales", copy: "Products sold, quantities and category performance." },
-  {
-    title: "Inventory report",
-    copy: "Opening stock, added stock, sales reduction and adjustments.",
-  },
-  { title: "Low-stock report", copy: "Products that reached their minimum level, by shop." },
-  {
-    title: "Expense report",
-    copy: "Expenses by category, branch and period against shop revenue.",
-  },
-  { title: "Branch performance", copy: "Sales, expenses and profit comparison across all shops." },
-  {
-    title: "Audit history",
-    copy: "Sales, price edits, stock adjustments, expenses and user changes.",
-  },
-  {
-    title: "VAT report",
-    copy: "Output VAT collected on sales, less VAT credited on returns.",
-  },
-  {
-    title: "Returns report",
-    copy: "Credit notes issued, value returned and reasons by shop.",
-  },
-];
+// ============================================
+// BRANCH UUID MAPPING FOR SUPABASE
+// ============================================
 
-export const money = (value: number) => "TZS " + value.toLocaleString("en-US");
+// Map branch IDs to Supabase UUIDs
+// Update these with your actual UUIDs from Supabase
+export const BRANCH_UUID_MAP: Record<string, string> = {
+  toto: "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  "totoz-empire": "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  main: "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  "main-branch": "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  "sunnozy-1": "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  "sunnozy-2": "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  mimis: "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  "marc-urembo": "b25dbe78-c9a9-432e-9117-2fb152267c61",
+};
+
+// ✅ Helper: Get UUID from branch ID
+export function getBranchUuid(branchId: string): string {
+  return BRANCH_UUID_MAP[branchId] || BRANCH_UUID_MAP["toto"] || branchId;
+}
+
+// ✅ Helper: Get branch ID from UUID
+export function getBranchIdFromUuid(uuid: string): ShopId {
+  for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
+    if (value === uuid) {
+      // Check if key is a valid ShopId
+      if (shopIds.includes(key as ShopId)) {
+        return key as ShopId;
+      }
+    }
+  }
+  return "toto";
+}
+
+// ✅ Helper: Get all branch UUIDs
+export function getAllBranchUuids(): string[] {
+  return Object.values(BRANCH_UUID_MAP);
+}
+
+// ✅ Helper: Get branch name from UUID
+export function getBranchNameFromUuid(uuid: string): string {
+  for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
+    if (value === uuid) {
+      const branch = branches.find((b) => b.id === key);
+      return branch?.name || key;
+    }
+  }
+  return "Unknown";
+}
+
+// ✅ Helper: Get branch ID from branch name
+export function getBranchIdFromName(name: string): ShopId {
+  const branch = branches.find((b) => b.name.toLowerCase() === name.toLowerCase());
+  return branch?.id || "toto";
+}
