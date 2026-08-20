@@ -37,8 +37,6 @@ function DashboardInner() {
 
   const [shop, setShop] = useState<BranchId>("all");
   const [section, setSection] = useState<SectionId>("pos");
-  
-  // ✅ FIX: Add loading state from useToto
   const { sales, returns, expenses, products, loading, error } = useToto();
 
   const effectiveShop: BranchId = isOwner ? shop : shop === "all" ? "toto" : shop;
@@ -115,7 +113,7 @@ function DashboardInner() {
     toast("Sales report exported");
   };
 
-  // ✅ FIX: Show loading state while data is loading
+  // ✅ FIX: Show loading state
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -124,11 +122,20 @@ function DashboardInner() {
     );
   }
 
-  // ✅ FIX: Show error if any
+  // ✅ FIX: Show error state
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-600">Error loading data: {error}</div>
+        <div className="text-red-600 text-center p-4">
+          <p className="font-bold">Error loading data</p>
+          <p className="text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -229,7 +236,6 @@ function DashboardInner() {
   );
 }
 
-// ⚠️ CRITICAL: THIS MUST BE THE VERY LAST LINE IN THE FILE
 export function Dashboard() {
   return (
     <TotoStoreProvider>
