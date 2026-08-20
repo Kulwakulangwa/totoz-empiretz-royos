@@ -1,19 +1,91 @@
-export type ShopId = "toto" | "sunnozy-1" | "sunnozy-2" | "mimis" | "marc-urembo";
-export type BranchId = ShopId | "all";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  branches,
+  shopIds,
+  stockOf,
+  INTERNAL_BARCODE_START,
+  getBranchUuid,
+  getBranchIdFromUuid,
+  type Activity,
+  type BranchId,
+  type Expense,
+  type Product,
+  type ShopId,
+  type Staff,
+} from "@/lib/toto-data";
 
-export const shopIds: ShopId[] = ["toto", "sunnozy-1", "sunnozy-2", "mimis", "marc-urembo"];
+export type SaleLine = { sku: string; name: string; qty: number; sell: number; buy: number };
+export type Sale = {
+  id: string;
+  receipt: number;
+  date: string;
+  branch: BranchId;
+  cashier: string;
+  payment: "Cash" | "Lipa Namba";
+  lines: SaleLine[];
+  total: number;
+  cost: number;
+  vat: number;
+  returned?: number;
+};
 
-export const branches: { id: BranchId; name: string }[] = [
-  { id: "toto", name: "Totoz Empire" },
-  { id: "sunnozy-1", name: "Sunnozy-1" },
-  { id: "sunnozy-2", name: "Sunnozy-2" },
-  { id: "mimis", name: "Mimis" },
-  { id: "marc-urembo", name: "Marc Urembo" },
-];
+export type SaleReturn = {
+  id: string;
+  saleId: string;
+  receipt: number;
+  creditNote: number;
+  date: string;
+  branch: BranchId;
+  cashier: string;
+  reason: string;
+  lines: SaleLine[];
+  total: number;
+  cost: number;
+  vat: number;
+  restock: boolean;
+};
 
-export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
+export type TaxSettings = {
+  businessName: string;
+  address: string;
+  phone: string;
+  tin: string;
+  vrn: string;
+  efdSerial: string;
+  vatEnabled: boolean;
+  vatRate: number;
+  receiptFooter: string;
+};
 
-export type Product = {
+export const defaultTaxSettings: TaxSettings = {
+  businessName: "Toto Empire",
+  address: "Dar es Salaam, Tanzania",
+  phone: "",
+  tin: "",
+  vrn: "",
+  efdSerial: "",
+  vatEnabled: true,
+  vatRate: 18,
+  receiptFooter: "Thank you for shopping with Toto Empire",
+};
+
+export const vatOf = (gross: number, settings: TaxSettings) =>
+  settings.vatEnabled && settings.vatRate > 0
+    ? Math.round(gross - gross / (1 + settings.vatRate / 100))
+    : 0;
+
+export type ProductInput = {
   name: string;
   sku: string;
   barcode: string;
@@ -24,121 +96,39 @@ export type Product = {
   stock: Partial<Record<ShopId, number>>;
 };
 
-export type Staff = {
-  name: string;
-  role: "owner" | "cashier";
-  branch: BranchId;
-  password?: string;
+export type SaveResult = { ok: true; product: Product } | { ok: false; error: string };
+
+type State = {
+  products: Product[];
+  sales: Sale[];
+  returns: SaleReturn[];
+  expenses: Expense[];
+  staff: Staff[];
+  activities: Activity[];
+  receipt: number;
+  creditNote: number;
+  settings: TaxSettings;
 };
 
-export type Expense = {
-  id: string;
-  date: string;
-  branch: BranchId;
-  category: string;
-  description: string;
-  amount: number;
-  note?: string;
-  created_by?: string;
+const EMPTY: State = {
+  products: [],
+  sales: [],
+  returns: [],
+  expenses: [],
+  staff: [],
+  activities: [],
+  receipt: 1,
+  creditNote: 1,
+  settings: defaultTaxSettings,
 };
 
-export type Activity = {
-  title: string;
-  desc: string;
-  time: string;
-};
-
-export type NavItem = {
-  id: SectionId;
-  label: string;
-  ownerOnly: boolean;
-  icon?: string;
-};
-
-export type SectionId =
-  | "overview"
-  | "pos"
-  | "returns"
-  | "inventory"
-  | "expenses"
-  | "staff"
-  | "reports"
-  | "settings"
-  | "vat";
-
-export const navItems: NavItem[] = [
-  { id: "overview", label: "Overview", ownerOnly: true, icon: "📊" },
-  { id: "pos", label: "Point of sale", ownerOnly: false, icon: "🛍️" },
-  { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
-  { id: "inventory", label: "Inventory", ownerOnly: true, icon: "📦" },
-  { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
-  { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
-  { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
-  { id: "vat", label: "VAT / EFD", ownerOnly: true, icon: "🧾" },
-];
-
-export const INTERNAL_BARCODE_START = 1000000;
-
-export const stockOf = (product: Product, branch: BranchId): number => {
-  if (branch === "all") {
-    return shopIds.reduce((sum, id) => sum + (product.stock[id] ?? 0), 0);
-  }
-  return product.stock[branch] ?? 0;
-};
-
-// ============================================
-// BRANCH UUID MAPPING FOR SUPABASE
-// ============================================
-
-// Map branch IDs to Supabase UUIDs
-// Update these with your actual UUIDs from Supabase
-export const BRANCH_UUID_MAP: Record<string, string> = {
-  toto: "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "totoz-empire": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  main: "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "main-branch": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "sunnozy-1": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "sunnozy-2": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  mimis: "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "marc-urembo": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-};
-
-// ✅ Helper: Get UUID from branch ID
-export function getBranchUuid(branchId: string): string {
-  return BRANCH_UUID_MAP[branchId] || BRANCH_UUID_MAP["toto"] || branchId;
-}
-
-// ✅ Helper: Get branch ID from UUID
-export function getBranchIdFromUuid(uuid: string): ShopId {
-  for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
-    if (value === uuid) {
-      // Check if key is a valid ShopId
-      if (shopIds.includes(key as ShopId)) {
-        return key as ShopId;
-      }
-    }
-  }
-  return "toto";
-}
-
-// ✅ Helper: Get all branch UUIDs
-export function getAllBranchUuids(): string[] {
-  return Object.values(BRANCH_UUID_MAP);
-}
-
-// ✅ Helper: Get branch name from UUID
-export function getBranchNameFromUuid(uuid: string): string {
-  for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
-    if (value === uuid) {
-      const branch = branches.find((b) => b.id === key);
-      return branch?.name || key;
-    }
-  }
-  return "Unknown";
-}
-
-// ✅ Helper: Get branch ID from branch name
-export function getBranchIdFromName(name: string): ShopId {
-  const branch = branches.find((b) => b.name.toLowerCase() === name.toLowerCase());
-  return branch?.id || "toto";
-}
+type Ctx = State & {
+  addProduct: (input: ProductInput) => Promise<SaveResult>;
+  updateProduct: (sku: string, input: ProductInput) => Promise<SaveResult>;
+  removeProduct: (sku: string) => Promise<void>;
+  adjustStock: (sku: string, branch: ShopId, delta: number, reason: string) => Promise<void>;
+  findByCode: (code: string, branch: BranchId) => Product | undefined;
+  nextBarcode: () => string;
+  suggestSku: (name: string) => string;
+  recordSale: (input: {
+   
