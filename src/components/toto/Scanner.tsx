@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
 import { Scan, X, Camera, Loader2, QrCode, Barcode } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,11 +12,14 @@ export type ScannerProps = {
 };
 
 export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProps) {
-  const [isScanning, setIsScanning] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const detectorRef = useRef<any | null>(null);
+  const scanningRef = useRef(false);
+  const frameIdRef = useRef<number | null>(null);
+  const [status, setStatus] = useState<"idle" | "starting" | "scanning" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState(false);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const isQR = mode === "qr";
   const label = isQR ? "QR Code" : "Barcode";
@@ -29,71 +31,140 @@ export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProp
       return;
     }
 
+    let cancelled = false;
+    setStatus("starting");
+    setError(null);
+
+    const stopScanner = () => {
+      scanningRef.current = false;
+      if (frameIdRef.current) {
+        cancelAnimationFrame(frameIdRef.current);
+        frameIdRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      detectorRef.current = null;
+      setStatus("idle");
+    };
+
     const startScanner = async () => {
-      if (!containerRef.current) return;
+      // Check if BarcodeDetector is supported
+      if (!window.BarcodeDetector) {
+        if (cancelled) return;
+        setError(
+          "Your browser doesn't support scanning. Please type the data manually.",
+        );
+        setStatus("error");
+        return;
+      }
 
       try {
-        setIsScanning(true);
-        setError(null);
-
-        const scanner = new Html5Qrcode(containerRef.current.id);
-
-        const config = {
-          fps: 15,
-          qrbox: { width: 280, height: 200 },
-          aspectRatio: 1.0,
-        };
-
-        await scanner.start(
-          { facingMode: "environment" },
-          config,
-          (decodedText) => {
-            console.log(`✅ ${label} detected:`, decodedText);
-            onScan(decodedText);
-            stopScanner();
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: "environment", 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 } 
           },
-          (errorMessage) => {
-            // Ignore frame errors
-          }
-        );
+        });
+        
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
 
-        scannerRef.current = scanner;
-      } catch (err: any) {
-        console.error("Error starting scanner:", err);
-        setError(err.message || "Failed to start camera. Please check permissions.");
-        setIsScanning(false);
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
+
+        // Create detector with appropriate formats
+        const formats = isQR 
+          ? ["qr_code"] 
+          : ["ean_13", "ean_8", "upc_a", "upc_e", "code_39", "code_128", "itf"];
+        
+        detectorRef.current = new window.BarcodeDetector({
+          formats: formats,
+        });
+
+        setStatus("scanning");
+        scanningRef.current = true;
+        detectLoop();
+      } catch (err) {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Could not access the camera.");
+        setStatus("error");
       }
     };
 
-    const timeoutId = setTimeout(startScanner, 100);
+    const detectLoop = () => {
+      if (!scanningRef.current || cancelled) return;
+      
+      const video = videoRef.current;
+      const detector = detectorRef.current;
+      
+      if (!video || !detector) {
+        frameIdRef.current = requestAnimationFrame(detectLoop);
+        return;
+      }
+      
+      if (video.readyState < 2) {
+        frameIdRef.current = requestAnimationFrame(detectLoop);
+        return;
+      }
+
+      try {
+        detector.detect(video)
+          .then((results: any[]) => {
+            if (results && results.length > 0 && !cancelled) {
+              const data = results[0]?.rawValue;
+              if (data) {
+                console.log(`✅ ${label} detected:`, data);
+                scanningRef.current = false;
+                onScan(data);
+                stopScanner();
+                return;
+              }
+            }
+            frameIdRef.current = requestAnimationFrame(detectLoop);
+          })
+          .catch(() => {
+            frameIdRef.current = requestAnimationFrame(detectLoop);
+          });
+      } catch {
+        frameIdRef.current = requestAnimationFrame(detectLoop);
+      }
+    };
+
+    startScanner();
 
     return () => {
-      clearTimeout(timeoutId);
+      cancelled = true;
       stopScanner();
     };
   }, [open, onScan, mode]);
 
-  const stopScanner = async () => {
-    try {
-      if (scannerRef.current) {
-        await scannerRef.current.stop();
-        await scannerRef.current.clear();
-        scannerRef.current = null;
-      }
-    } catch (err) {
-      console.error("Error stopping scanner:", err);
-    }
-    setIsScanning(false);
-  };
-
   const toggleTorch = async () => {
     try {
-      if (scannerRef.current) {
-        const newState = !torchOn;
-        await scannerRef.current.applyVideoConstraints({
-          advanced: [{ torch: newState }] as any,
-        });
-        setTorchOn(newState);
+      if (streamRef.current) {
+        const track = streamRef.current.getVideoTracks()[0];
+        if (track) {
+          const capabilities = track.getCapabilities() as any;
+          if (capabilities.torch) {
+            const newState = !torchOn;
+            await track.applyConstraints({
+              advanced: [{ torch: newState }] as any,
+            });
+            setTorchOn(newState);
+          } else {
+            setError("Torch not available on this device.");
+          }
+        }
       }
     } catch (err) {
       console.error("Error toggling torch:", err);
@@ -120,41 +191,43 @@ export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProp
         </div>
 
         <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-black">
-          <div
-            id="scanner-container"
-            ref={containerRef}
-            className="size-full"
+          <video 
+            ref={videoRef} 
+            className="size-full object-cover" 
+            muted 
+            playsInline 
+            autoPlay
           />
-
-          {isScanning && !error && (
-            <div className="absolute inset-0 flex items-center justify-center">
+          
+          {status === "error" && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+          
+          {status === "starting" && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
               <div className="text-center">
-                <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto" />
+                <Loader2 className="w-8 h-8 text-blue-400 animate-spin mx-auto" />
                 <p className="text-white text-sm mt-2">Starting camera...</p>
               </div>
             </div>
           )}
-
-          {error && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-6 text-center">
-              <p className="text-red-400 text-sm">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-2 px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          )}
-
-          {!error && (
+          
+          {status === "scanning" && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="relative">
+                {/* Corner markers */}
                 <div className="absolute -top-0.5 -left-0.5 w-8 h-8 border-t-2 border-l-2 border-blue-400" />
                 <div className="absolute -top-0.5 -right-0.5 w-8 h-8 border-t-2 border-r-2 border-blue-400" />
                 <div className="absolute -bottom-0.5 -left-0.5 w-8 h-8 border-b-2 border-l-2 border-blue-400" />
                 <div className="absolute -bottom-0.5 -right-0.5 w-8 h-8 border-b-2 border-r-2 border-blue-400" />
                 <div className="w-64 h-44 border-2 border-blue-400/30 rounded-lg" />
+                {/* Center crosshair */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-0.5 bg-blue-400/50" />
+                  <div className="w-0.5 h-8 bg-blue-400/50" />
+                </div>
               </div>
             </div>
           )}
@@ -162,13 +235,16 @@ export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProp
 
         <div className="mt-4 flex flex-col gap-3">
           <p className="text-[12px] text-muted-foreground text-center">
-            {error 
-              ? "⚠️ Error occurred. Please try again." 
-              : `📷 Position ${label.toLowerCase()} in the center of the frame`
+            {status === "scanning" 
+              ? `📷 Position ${label.toLowerCase()} in the center of the frame` 
+              : status === "error"
+              ? "⚠️ " + error
+              : "Starting camera..."
             }
           </p>
 
           <div className="flex items-center justify-between gap-2">
+            {/* Torch toggle */}
             <button
               onClick={toggleTorch}
               className={cn(
@@ -190,6 +266,7 @@ export function Scanner({ open, onClose, onScan, mode = "barcode" }: ScannerProp
             </button>
           </div>
 
+          {/* Manual input fallback */}
           <div className="mt-2">
             <p className="text-[11px] text-muted-foreground text-center mb-1">
               Or enter manually:
