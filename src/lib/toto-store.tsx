@@ -495,6 +495,9 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
+  // ============================================
+  // ✅ FIXED: recordSale with proper cashier_id handling
+  // ============================================
   const recordSale = useCallback(async (input: {
     branch: BranchId;
     cashier: string;
@@ -505,7 +508,9 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
     const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
     const receiptNumber = ref.current.receipt;
-    const cashierId = staffProfile?.id ?? user?.id ?? null;
+
+    // ✅ FIX: Use staffProfile ID or user ID. If both null, use null
+    const cashierId = staffProfile?.id || user?.id || null;
 
     try {
       const { data: saleData, error: saleError } = await supabase
@@ -523,8 +528,12 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         .select()
         .single();
 
-      if (saleError) throw saleError;
+      if (saleError) {
+        console.error('Sale insert error:', saleError);
+        throw saleError;
+      }
 
+      // Insert sale items and update inventory
       for (const line of input.lines) {
         const { error: itemError } = await supabase
           .from('sale_items')
@@ -537,19 +546,32 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
             total_price: line.sell * line.qty,
           });
 
-        if (itemError) throw itemError;
+        if (itemError) {
+          console.error('Sale item insert error:', itemError);
+          throw itemError;
+        }
 
-        const { data: product } = await supabase
+        // Update inventory
+        const { data: product, error: productError } = await supabase
           .from('products')
           .select('quantity')
           .eq('sku', line.sku)
           .single();
 
+        if (productError) {
+          console.error('Product not found:', line.sku, productError);
+          continue;
+        }
+
         if (product) {
-          await supabase
+          const { error: updateError } = await supabase
             .from('products')
             .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
             .eq('sku', line.sku);
+
+          if (updateError) {
+            console.error('Inventory update error:', updateError);
+          }
         }
       }
 
@@ -581,7 +603,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       console.error('Error recording sale:', err);
       throw err;
     }
-  }, [commit, refreshData]);
+  }, [commit, refreshData, staffProfile, user]);
 
   const recordReturn = useCallback(async (input: {
     saleId: string;
