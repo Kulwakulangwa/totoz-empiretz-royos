@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { X, Camera, Loader2, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,7 @@ export function Scanner({ open, onClose, onScan, mode = "qr" }: ScannerProps) {
   const [torchOn, setTorchOn] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scannerIdRef = useRef(`scanner-${Math.random().toString(36).slice(2, 10)}`);
 
   const label = mode === "qr" ? "QR Code" : "Barcode";
 
@@ -31,15 +32,28 @@ export function Scanner({ open, onClose, onScan, mode = "qr" }: ScannerProps) {
       if (!containerRef.current) return;
 
       try {
+        await stopScanner();
+
         setIsScanning(true);
         setError(null);
 
-        const scanner = new Html5Qrcode(containerRef.current.id);
-
+        const scanner = new Html5Qrcode(scannerIdRef.current, false);
         const config = {
-          fps: 15,
-          qrbox: { width: 280, height: 200 },
+          fps: 10,
+          qrbox: { width: 260, height: 260 },
           aspectRatio: 1.0,
+          disableFlip: false,
+          formatsToSupport:
+            mode === "barcode"
+              ? [
+                  Html5QrcodeSupportedFormats.EAN_13,
+                  Html5QrcodeSupportedFormats.EAN_8,
+                  Html5QrcodeSupportedFormats.UPC_A,
+                  Html5QrcodeSupportedFormats.UPC_E,
+                  Html5QrcodeSupportedFormats.CODE_128,
+                  Html5QrcodeSupportedFormats.CODE_39,
+                ]
+              : [Html5QrcodeSupportedFormats.QR_CODE],
         };
 
         await scanner.start(
@@ -50,15 +64,15 @@ export function Scanner({ open, onClose, onScan, mode = "qr" }: ScannerProps) {
             onScan(decodedText);
             stopScanner();
           },
-          (errorMessage) => {
+          () => {
             // ignore frame errors
-          }
+          },
         );
 
         scannerRef.current = scanner;
       } catch (err: any) {
         console.error("Error starting scanner:", err);
-        setError(err.message || "Failed to start camera.");
+        setError(err?.message || "Failed to start camera. Please allow camera access and try again.");
         setIsScanning(false);
       }
     };
@@ -117,7 +131,7 @@ export function Scanner({ open, onClose, onScan, mode = "qr" }: ScannerProps) {
 
         <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-black">
           <div
-            id="scanner-container"
+            id={scannerIdRef.current}
             ref={containerRef}
             className="size-full"
           />

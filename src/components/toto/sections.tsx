@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Panel, PanelHead, Pill, EmptyState, MiniCard } from "./primitives";
 import { Scanner } from "./Scanner";
+import { ProductQRCode } from "./QRCode";
 import {
   Dialog,
   DialogContent,
@@ -461,6 +462,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState(emptyProduct);
+  const [qrProduct, setQrProduct] = useState<Product | null>(null);
   const [adjust, setAdjust] = useState<{
     sku: string;
     branch: ShopId;
@@ -606,6 +608,12 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                       <div className="flex gap-2">
                         <button
                           className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
+                          onClick={() => setQrProduct(p)}
+                        >
+                          QR
+                        </button>
+                        <button
+                          className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
                           onClick={() => openEdit(p)}
                         >
                           Edit
@@ -721,6 +729,24 @@ export function InventorySection({ shop }: { shop: BranchId }) {
               {editing ? "Save changes" : "Add product"}
             </button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!qrProduct} onOpenChange={(open) => !open && setQrProduct(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Product QR code</DialogTitle>
+            <DialogDescription>{qrProduct ? `${qrProduct.name} · ${qrProduct.sku}` : ""}</DialogDescription>
+          </DialogHeader>
+          {qrProduct && (
+            <div className="flex flex-col items-center gap-3 py-2">
+              <ProductQRCode value={qrProduct.barcode || qrProduct.sku || qrProduct.name} size={220} />
+              <div className="text-center text-[12px] text-muted-foreground">
+                <div className="font-medium text-foreground">{qrProduct.name}</div>
+                <div className="font-mono">{qrProduct.barcode || qrProduct.sku}</div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
