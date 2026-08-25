@@ -496,7 +496,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
   }, [commit, refreshData]);
 
   // ============================================
-  // ✅ FIXED: recordSale with proper cashier_id handling
+  // ✅ FIXED: recordSale with proper payment method (lowercase)
   // ============================================
   const recordSale = useCallback(async (input: {
     branch: BranchId;
@@ -508,9 +508,10 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
     const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
     const receiptNumber = ref.current.receipt;
-
-    // ✅ FIX: Use staffProfile ID or user ID. If both null, use null
     const cashierId = staffProfile?.id || user?.id || null;
+
+    // ✅ Convert payment method to lowercase for database
+    const paymentMethod = input.payment.toLowerCase() as "cash" | "lipa_namba";
 
     try {
       const { data: saleData, error: saleError } = await supabase
@@ -519,7 +520,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           receipt_number: `REC-${receiptNumber}`,
           branch_id: getBranchUuid(branch),
           cashier_id: cashierId,
-          payment_method: input.payment,
+          payment_method: paymentMethod,
           total: total,
           subtotal: total,
           tax: 0,
