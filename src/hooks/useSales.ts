@@ -50,11 +50,14 @@ export function useSales() {
       // Calculate totals
       const subtotal = saleData.items.reduce((sum, item) => sum + item.total_price, 0);
       const discount = saleData.discount || 0;
-      const tax = 0; // You can implement tax logic here
+      const tax = 0;
       const total = subtotal - discount + tax;
 
       // Generate receipt number
       const receiptNumber = `REC-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+      // ✅ Convert payment method to lowercase for database
+      const paymentMethod = saleData.payment_method.toLowerCase() as "cash" | "lipa_namba";
 
       // Start transaction
       const { data: sale, error: saleError } = await supabase
@@ -62,14 +65,14 @@ export function useSales() {
         .insert([{
           receipt_number: receiptNumber,
           branch_id: branchId,
-          cashier_id: staff?.id,
+          cashier_id: staff?.id || null,
           customer_name: saleData.customer_name || null,
           customer_phone: saleData.customer_phone || null,
           subtotal,
           tax,
           discount,
           total,
-          payment_method: saleData.payment_method,
+          payment_method: paymentMethod,
           payment_status: 'completed',
           notes: saleData.notes || null,
         }])
@@ -100,7 +103,6 @@ export function useSales() {
 
           if (updateError) {
             console.error('Error updating inventory:', updateError);
-            // You might want to handle this more gracefully
           }
         }
       }
@@ -110,7 +112,7 @@ export function useSales() {
         .from('activity_logs')
         .insert([{
           branch_id: branchId,
-          user_id: staff?.id,
+          user_id: staff?.id || null,
           action: 'sale_created',
           details: {
             receipt_number: receiptNumber,
