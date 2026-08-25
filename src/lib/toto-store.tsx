@@ -505,6 +505,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
     const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
     const receiptNumber = ref.current.receipt;
+    const cashierId = staffProfile?.id ?? user?.id ?? null;
 
     try {
       const { data: saleData, error: saleError } = await supabase
@@ -512,7 +513,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         .insert({
           receipt_number: `REC-${receiptNumber}`,
           branch_id: getBranchUuid(branch),
-          cashier_id: input.cashier,
+          cashier_id: cashierId,
           payment_method: input.payment,
           total: total,
           subtotal: total,
