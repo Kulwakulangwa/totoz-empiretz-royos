@@ -392,22 +392,30 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         </div>
         <button
           className={cn(btnPrimary, "w-full")}
-          onClick={() => {
+          onClick={async () => {
             if (!cart.length) {
               toast("Add at least one product before completing a sale.");
               return;
             }
-            const sale = recordSale({
-              branch: activeBranch,
-              cashier,
-              payment: pay,
-              lines: cart.map(({ stock: _stock, ...line }) => line),
-            });
-            toast(`Receipt #${String(sale.receipt).padStart(4, "0")} completed`, {
-              description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
-            });
-            setCart([]);
-            focusInput();
+
+            try {
+              const sale = await recordSale({
+                branch: activeBranch,
+                cashier,
+                payment: pay,
+                lines: cart.map(({ stock: _stock, ...line }) => line),
+              });
+
+              toast(`Receipt #${String(sale.receipt).padStart(4, "0")} completed`, {
+                description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
+              });
+              setCart([]);
+              focusInput();
+            } catch (err: any) {
+              toast("Sale could not be completed", {
+                description: err?.message || "Please try again.",
+              });
+            }
           }}
         >
           Complete sale
