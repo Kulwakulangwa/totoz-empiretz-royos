@@ -5,12 +5,10 @@ import { LogOut } from "lucide-react";
 interface BranchSummary {
   id: BranchId;
   name: string;
-  todaySales: number;
-  todayExpenses: number;
-  totalSales: number;
-  totalExpenses: number;
-  profit: number;
-  lowStockCount: number;
+  revenueToday: number;
+  expensesToday: number;
+  profitToday: number;
+  vatToday: number;
 }
 
 interface BranchSelectionPageProps {
@@ -123,11 +121,10 @@ export function BranchSelectionPage({
                 key={branch.id}
                 id={branch.id}
                 name={branch.name}
-                todaySales={branch.todaySales}
-                totalSales={branch.totalSales}
-                todayExpenses={branch.todayExpenses}
-                profit={branch.profit}
-                lowStockCount={branch.lowStockCount}
+                revenue={branch.revenueToday}
+                expenses={branch.expensesToday}
+                profit={branch.profitToday}
+                vat={branch.vatToday}
                 onClick={() => onSelectBranch(branch.id)}
                 role={isOwner ? "Owner" : "Cashier"}
               />
