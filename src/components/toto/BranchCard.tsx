@@ -1,15 +1,14 @@
 import { BranchId, colors, money } from "@/lib/toto-data";
 import { cn } from "@/lib/utils";
-import { Store, AlertCircle } from "lucide-react";
+import { Store } from "lucide-react";
 
 interface BranchCardProps {
   id: BranchId;
   name: string;
-  todaySales: number;
-  totalSales: number;
-  todayExpenses: number;
+  revenue: number;
+  expenses: number;
   profit: number;
-  lowStockCount: number;
+  vat: number;
   isSelected?: boolean;
   onClick: () => void;
   role?: string;
@@ -18,11 +17,10 @@ interface BranchCardProps {
 export function BranchCard({
   id,
   name,
-  todaySales,
-  totalSales,
-  todayExpenses,
+  revenue,
+  expenses,
   profit,
-  lowStockCount,
+  vat,
   isSelected,
   onClick,
   role,
@@ -58,19 +56,15 @@ export function BranchCard({
         )}
       </div>
 
-      {/* Metrics Grid */}
-      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+      {/* Metrics Grid – 2 columns x 2 rows */}
+      <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
         <div>
-          <p className="text-xs" style={{ color: colors.textMuted }}>Today's Sales</p>
-          <p className="font-bold" style={{ color: colors.textDark }}>{money(todaySales)}</p>
-        </div>
-        <div>
-          <p className="text-xs" style={{ color: colors.textMuted }}>Total Sales</p>
-          <p className="font-bold" style={{ color: colors.textDark }}>{money(totalSales)}</p>
+          <p className="text-xs" style={{ color: colors.textMuted }}>Revenue</p>
+          <p className="font-bold" style={{ color: colors.textDark }}>{money(revenue)}</p>
         </div>
         <div>
           <p className="text-xs" style={{ color: colors.textMuted }}>Expenses</p>
-          <p className="font-bold" style={{ color: colors.textDark }}>{money(todayExpenses)}</p>
+          <p className="font-bold" style={{ color: colors.textDark }}>{money(expenses)}</p>
         </div>
         <div>
           <p className="text-xs" style={{ color: colors.textMuted }}>Profit</p>
@@ -78,15 +72,11 @@ export function BranchCard({
             {money(profit)}
           </p>
         </div>
-      </div>
-
-      {/* Low stock indicator */}
-      {lowStockCount > 0 && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-orange-500">
-          <AlertCircle className="w-3.5 h-3.5" />
-          <span>{lowStockCount} low stock items</span>
+        <div>
+          <p className="text-xs" style={{ color: colors.textMuted }}>VAT</p>
+          <p className="font-bold" style={{ color: colors.textDark }}>{money(vat)}</p>
         </div>
-      )}
+      </div>
 
       {/* Hover indicator */}
       <div className="absolute inset-0 rounded-2xl pointer-events-none ring-1 ring-inset ring-transparent group-hover:ring-blue-500/20 transition-all" />
