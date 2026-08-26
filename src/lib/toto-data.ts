@@ -13,7 +13,6 @@ export const branches: { id: BranchId; name: string }[] = [
 
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
-// Colors (unchanged)
 export const colors = {
   primary: "#5B3A96",
   primaryDeep: "#4C2E85",
@@ -102,24 +101,23 @@ export type NavItem = {
 export type SectionId =
   | "overview"
   | "pos"
-  | "sales"        // ✅ replaced "vat"
+  | "sales"        // ✅ Replaced "vat"
   | "returns"
   | "inventory"
   | "expenses"
   | "staff"
   | "reports"
-  | "settings";    // keep settings if you have a separate settings page
+  | "settings";
 
 export const navItems: NavItem[] = [
   { id: "overview", label: "Dashboard", ownerOnly: true, icon: "📊" },
   { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
-  { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },   // ✅ NEW
+  { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
   { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
   { id: "inventory", label: "Goods", ownerOnly: true, icon: "📦" },
   { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
   { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
   { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
-  // VAT/EFD removed – replaced by Sales above
   { id: "settings", label: "Settings", ownerOnly: true, icon: "⚙️" },
 ];
 
