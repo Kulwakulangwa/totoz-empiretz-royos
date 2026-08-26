@@ -1,33 +1,32 @@
-import { BranchId, colors } from "@/lib/toto-data";
+import { BranchId, colors, money } from "@/lib/toto-data";
 import { cn } from "@/lib/utils";
-import { Store, TrendingUp, Users } from "lucide-react";
+import { Store, AlertCircle } from "lucide-react";
 
 interface BranchCardProps {
   id: BranchId;
   name: string;
   todaySales: number;
+  totalSales: number;
+  todayExpenses: number;
+  profit: number;
+  lowStockCount: number;
   isSelected?: boolean;
   onClick: () => void;
   role?: string;
-  userCount?: number;
 }
 
 export function BranchCard({
   id,
   name,
   todaySales,
+  totalSales,
+  todayExpenses,
+  profit,
+  lowStockCount,
   isSelected,
   onClick,
   role,
-  userCount,
 }: BranchCardProps) {
-  const formattedSales = new Intl.NumberFormat("en-TZ", {
-    style: "currency",
-    currency: "TZS",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(todaySales);
-
   return (
     <button
       onClick={onClick}
@@ -43,9 +42,7 @@ export function BranchCard({
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <Store className="w-5 h-5 text-gray-500 group-hover:text-blue-500 transition-colors" />
-            <h3 className="text-lg font-semibold" style={{ color: colors.textDark }}>
-              {name}
-            </h3>
+            <h3 className="text-lg font-semibold" style={{ color: colors.textDark }}>{name}</h3>
           </div>
           {role && (
             <div className="mt-1 flex items-center gap-1.5">
@@ -56,27 +53,40 @@ export function BranchCard({
         </div>
         {isSelected && (
           <div className="flex-shrink-0">
-            <div className="px-2 py-1 text-xs font-medium text-white bg-blue-500 rounded-full">
-              Selected
-            </div>
+            <div className="px-2 py-1 text-xs font-medium text-white bg-blue-500 rounded-full">Selected</div>
           </div>
         )}
       </div>
 
-      <div className="mt-4 flex items-end justify-between">
+      {/* Metrics Grid */}
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
         <div>
-          <p className="text-sm" style={{ color: colors.textMuted }}>Today's Sales</p>
-          <p className="text-xl font-bold" style={{ color: colors.textDark }}>
-            {formattedSales}
+          <p className="text-xs" style={{ color: colors.textMuted }}>Today's Sales</p>
+          <p className="font-bold" style={{ color: colors.textDark }}>{money(todaySales)}</p>
+        </div>
+        <div>
+          <p className="text-xs" style={{ color: colors.textMuted }}>Total Sales</p>
+          <p className="font-bold" style={{ color: colors.textDark }}>{money(totalSales)}</p>
+        </div>
+        <div>
+          <p className="text-xs" style={{ color: colors.textMuted }}>Expenses</p>
+          <p className="font-bold" style={{ color: colors.textDark }}>{money(todayExpenses)}</p>
+        </div>
+        <div>
+          <p className="text-xs" style={{ color: colors.textMuted }}>Profit</p>
+          <p className="font-bold" style={{ color: profit >= 0 ? colors.accent : colors.secondary }}>
+            {money(profit)}
           </p>
         </div>
-        {userCount !== undefined && (
-          <div className="flex items-center gap-1 text-sm" style={{ color: colors.textMuted }}>
-            <Users className="w-4 h-4" />
-            <span>{userCount} staff</span>
-          </div>
-        )}
       </div>
+
+      {/* Low stock indicator */}
+      {lowStockCount > 0 && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-orange-500">
+          <AlertCircle className="w-3.5 h-3.5" />
+          <span>{lowStockCount} low stock items</span>
+        </div>
+      )}
 
       {/* Hover indicator */}
       <div className="absolute inset-0 rounded-2xl pointer-events-none ring-1 ring-inset ring-transparent group-hover:ring-blue-500/20 transition-all" />
