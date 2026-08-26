@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/toto/Sidebar";
+import { BranchSelectionPage } from "./BranchSelectionPage";
+import { BranchDashboardHeader } from "./BranchDashboardHeader";
 import {
   ExpensesSection,
   InventorySection,
@@ -31,26 +33,104 @@ const btnPrimary =
 
 function DashboardInner() {
   const navigate = useNavigate();
-  const { user, role, signOut } = useAuth();
+  const { user, role, signOut, staffProfile, loading: authLoading } = useAuth();
+  const { sales, returns, expenses, products, loading: storeLoading, refreshData } = useToto();
+
   const isOwner = role === "owner";
   const cashier = user?.user_metadata?.["full_name"] ?? user?.email ?? "Staff";
 
-  const [shop, setShop] = useState<BranchId>("all");
-  const [section, setSection] = useState<SectionId>("pos");
-  const { sales, returns, expenses, products, loading, error } = useToto();
+  // Branch selection state
+  const [selectedBranch, setSelectedBranch] = useState<BranchId | null>(null);
+  const [showBranchSelector, setShowBranchSelector] = useState(true);
+  const [section, setSection] = useState<SectionId>("overview");
 
-  const effectiveShop: BranchId = isOwner ? shop : shop === "all" ? "toto" : shop;
-  
-  // ✅ FIX: Add fallback if branch not found
-  const data = branches.find((b) => b.id === effectiveShop) || branches[0] || { id: "toto", name: "Totoz Empire" };
-  
+  // Determine which branches the user can access
+  const accessibleBranches = useMemo(() => {
+    if (isOwner) return branches;
+    if (staffProfile) {
+      const assignedBranch = branches.find((b) => b.id === staffProfile.branch_id);
+      return assignedBranch ? [assignedBranch] : [];
+    }
+    return [];
+  }, [isOwner, staffProfile]);
+
+  // Auto-select if only one branch
+  useEffect(() => {
+    if (accessibleBranches.length === 1 && !selectedBranch && !showBranchSelector) {
+      setSelectedBranch(accessibleBranches[0].id);
+      setShowBranchSelector(false);
+    }
+  }, [accessibleBranches, selectedBranch, showBranchSelector]);
+
+  // If user has no branches, show error
+  if (!authLoading && accessibleBranches.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen p-4">
+        <div className="text-center max-w-md">
+          <h2 className="text-2xl font-bold text-gray-900">No Access</h2>
+          <p className="mt-2 text-gray-600">
+            You don't have access to any shop. Please contact your administrator.
+          </p>
+          <button
+            onClick={() => signOut()}
+            className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show branch selection page
+  if (showBranchSelector) {
+    return (
+      <BranchSelectionPage
+        branches={accessibleBranches}
+        onSelectBranch={(id) => {
+          setSelectedBranch(id);
+          setShowBranchSelector(false);
+        }}
+        userEmail={user?.email}
+        role={role || undefined}
+        onLogout={() => {
+          signOut();
+          navigate({ to: "/auth" });
+        }}
+        getTodaySales={(id) => {
+          const today = new Date().toISOString().slice(0, 10);
+          const branchSales = sales.filter((s) => s.branch === id && s.date === today);
+          return branchSales.reduce((sum, s) => sum + s.total, 0);
+        }}
+      />
+    );
+  }
+
+  // Loading state
+  if (authLoading || storeLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // No branch selected but not showing selector (shouldn't happen)
+  if (!selectedBranch) {
+    setShowBranchSelector(true);
+    return null;
+  }
+
+  // Selected branch data
+  const effectiveShop = selectedBranch;
+  const data = branches.find((b) => b.id === effectiveShop) || branches[0];
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
   const activeSection: SectionId =
-    isOwner || !navItems.find((n) => n.id === section)?.ownerOnly ? section : "pos";
+    isOwner || !navItems.find((n) => n.id === section)?.ownerOnly ? section : "overview";
 
   const today = new Date().toISOString().slice(0, 10);
   const inScope = <T extends { branch: BranchId }>(rows: T[]) =>
-    rows.filter((r) => effectiveShop === "all" || r.branch === effectiveShop);
+    rows.filter((r) => r.branch === effectiveShop);
 
   const todaySales = inScope(sales).filter((s) => s.date === today);
   const todayReturns = inScope(returns).filter((r) => r.date === today);
@@ -113,110 +193,97 @@ function DashboardInner() {
     toast("Sales report exported");
   };
 
-  // ✅ FIX: Show loading state
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
-  // ✅ FIX: Show error state
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-red-600 text-center p-4">
-          <p className="font-bold">Error loading data</p>
-          <p className="text-sm">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const handleSwitchBranch = () => {
+    setShowBranchSelector(true);
+    setSelectedBranch(null);
+    setSection("overview");
+  };
 
   return (
-    <div className="min-h-screen md:grid md:grid-cols-[240px_minmax(0,1fr)]">
-      <Sidebar
-        shop={effectiveShop}
-        section={activeSection}
-        isOwner={isOwner}
-        onShop={setShop}
-        onSection={setSection}
+    <div className="min-h-screen bg-gray-50">
+      {/* Branch Dashboard Header */}
+      <BranchDashboardHeader
+        branchName={data.name}
+        branchId={effectiveShop}
+        userEmail={user?.email}
+        role={role || undefined}
+        onSwitchBranch={handleSwitchBranch}
+        onLogout={() => {
+          signOut();
+          navigate({ to: "/auth" });
+        }}
       />
 
-      <main className="min-w-0 px-4 pt-7 pb-28 sm:px-6 lg:px-10">
-        <header className="mb-7 flex flex-col justify-between gap-4 border-b border-border pb-6 lg:flex-row lg:items-end">
-          <div>
-            <p className="text-[12px] font-medium tracking-wide text-muted-foreground uppercase">
-              {data.name} · {isOwner ? "Owner" : "Cashier"}
-            </p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-              {isOwner ? "Business overview" : `Point of sale — ${data.name}`}
-            </h1>
-            <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-              {isOwner
-                ? "Sales, returns, inventory, expenses, VAT receipts and reporting across every shop."
-                : "Scan or search a product, build the receipt and confirm Cash or Lipa Namba payment."}
-            </p>
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <span className="hidden sm:inline-flex min-h-9 items-center rounded-md border border-border bg-card px-3 text-[12px] text-muted-foreground">
-              {user?.email}
-            </span>
-            
-            {isOwner && (
-              <button className={btn} onClick={handleExport}>
-                📊 Export report
+      <div className="md:grid md:grid-cols-[240px_minmax(0,1fr)]">
+        <Sidebar
+          shop={effectiveShop}
+          section={activeSection}
+          isOwner={isOwner}
+          onShop={() => {}} // No-op since branch is fixed
+          onSection={setSection}
+          hideBranches={true}
+        />
+
+        <main className="min-w-0 px-4 pt-6 pb-28 sm:px-6 lg:px-8">
+          <header className="mb-6 flex flex-col justify-between gap-4 border-b border-border pb-4 lg:flex-row lg:items-end">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+                {isOwner ? "Business overview" : `Point of sale — ${data.name}`}
+              </h1>
+              <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
+                {isOwner
+                  ? "Sales, returns, inventory, expenses, VAT receipts and reporting for this shop."
+                  : "Scan or search a product, build the receipt and confirm Cash or Lipa Namba payment."}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {isOwner && (
+                <button className={btn} onClick={handleExport}>
+                  📊 Export report
+                </button>
+              )}
+              <button
+                className={btn}
+                onClick={() => {
+                  signOut();
+                  navigate({ to: "/auth" });
+                }}
+              >
+                Sign out
               </button>
-            )}
-            
-            <button
-              className={btn}
-              onClick={async () => {
-                await signOut();
-                navigate({ to: "/auth" });
-              }}
-            >
-              Sign out
-            </button>
-            
-            <button className={btnPrimary} onClick={() => setSection("pos")}>
-              🧾 New sale
-            </button>
-          </div>
-        </header>
+              <button className={btnPrimary} onClick={() => setSection("pos")}>
+                🧾 New sale
+              </button>
+            </div>
+          </header>
 
-        {isOwner && activeSection === "overview" && (
-          <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {metrics.map((metric) => (
-              <article key={metric.label} className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                <div className="text-[12px] font-medium text-muted-foreground">{metric.label}</div>
-                <div className="mt-2 font-mono text-xl font-bold">{metric.value}</div>
-                <div className="mt-1 text-[12px] text-muted-foreground">{metric.note}</div>
-              </article>
-            ))}
-          </section>
-        )}
+          {isOwner && activeSection === "overview" && (
+            <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {metrics.map((metric) => (
+                <article key={metric.label} className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+                  <div className="text-[12px] font-medium text-muted-foreground">{metric.label}</div>
+                  <div className="mt-2 font-mono text-xl font-bold">{metric.value}</div>
+                  <div className="mt-1 text-[12px] text-muted-foreground">{metric.note}</div>
+                </article>
+              ))}
+            </section>
+          )}
 
-        {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
-        {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-        {activeSection === "returns" && (
-          <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
-        )}
-        {activeSection === "inventory" && isOwner && <InventorySection shop={effectiveShop} />}
-        {activeSection === "expenses" && isOwner && <ExpensesSection shop={effectiveShop} />}
-        {activeSection === "staff" && isOwner && <StaffSection />}
-        {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
-        {activeSection === "settings" && isOwner && <SettingsSection />}
-      </main>
+          {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
+          {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
+          {activeSection === "returns" && (
+            <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
+          )}
+          {activeSection === "inventory" && isOwner && <InventorySection shop={effectiveShop} />}
+          {activeSection === "expenses" && isOwner && <ExpensesSection shop={effectiveShop} />}
+          {activeSection === "staff" && isOwner && <StaffSection />}
+          {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
+          {activeSection === "settings" && isOwner && <SettingsSection />}
+        </main>
+      </div>
 
+      {/* Mobile Bottom Navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-1 border-t border-border bg-card p-2 md:hidden shadow-lg">
         {visibleNav.slice(0, 5).map((item) => (
           <button
@@ -231,6 +298,13 @@ function DashboardInner() {
             <span>{item.label}</span>
           </button>
         ))}
+        <button
+          onClick={handleSwitchBranch}
+          className="flex flex-col items-center justify-center min-h-12 rounded-md px-1 text-[10px] font-medium text-blue-600"
+        >
+          <span className="text-lg mb-0.5">🏪</span>
+          <span>Switch</span>
+        </button>
       </nav>
     </div>
   );
