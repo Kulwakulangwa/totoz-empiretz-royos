@@ -53,32 +53,31 @@ function DashboardInner() {
     return [];
   }, [isOwner, staffProfile]);
 
-  // Compute all-shop metrics
+  // Compute all-shop metrics (today or total? Use total for summary)
   const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
   const allExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const allProfit = allRevenue - sales.reduce((sum, s) => sum + s.cost, 0) - allExpenses;
   const allVat = sales.reduce((sum, s) => sum + s.vat, 0);
 
-  // Compute per-branch metrics
+  // Compute per-branch metrics for TODAY only
+  const today = new Date().toISOString().slice(0, 10);
   const branchSummaries = branches.map((b) => {
-    const branchSales = sales.filter((s) => s.branch === b.id);
-    const branchExpenses = expenses.filter((e) => e.branch === b.id);
-    const today = new Date().toISOString().slice(0, 10);
-    const todaySales = branchSales.filter((s) => s.date === today).reduce((sum, s) => sum + s.total, 0);
-    const todayExpenses = branchExpenses.filter((e) => e.date === today).reduce((sum, e) => sum + e.amount, 0);
-    const totalSales = branchSales.reduce((sum, s) => sum + s.total, 0);
-    const totalExpenses = branchExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const profit = totalSales - branchSales.reduce((sum, s) => sum + s.cost, 0) - totalExpenses;
-    const lowStockCount = products.filter((p) => stockOf(p, b.id) <= p.min).length;
+    const branchSales = sales.filter((s) => s.branch === b.id && s.date === today);
+    const branchExpenses = expenses.filter((e) => e.branch === b.id && e.date === today);
+
+    const revenueToday = branchSales.reduce((sum, s) => sum + s.total, 0);
+    const expensesToday = branchExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const costToday = branchSales.reduce((sum, s) => sum + s.cost, 0);
+    const vatToday = branchSales.reduce((sum, s) => sum + s.vat, 0);
+    const profitToday = revenueToday - costToday - expensesToday;
+
     return {
       id: b.id,
       name: b.name,
-      todaySales,
-      todayExpenses,
-      totalSales,
-      totalExpenses,
-      profit,
-      lowStockCount,
+      revenueToday,
+      expensesToday,
+      profitToday,
+      vatToday,
     };
   });
 
@@ -149,13 +148,9 @@ function DashboardInner() {
   const activeSection: SectionId =
     isOwner || !navItems.find((n) => n.id === section)?.ownerOnly ? section : "overview";
 
-  const today = new Date().toISOString().slice(0, 10);
-  const inScope = <T extends { branch: BranchId }>(rows: T[]) =>
-    rows.filter((r) => r.branch === effectiveShop);
-
-  const todaySales = inScope(sales).filter((s) => s.date === today);
-  const todayReturns = inScope(returns).filter((r) => r.date === today);
-  const todayExpenses = inScope(expenses).filter((e) => e.date === today);
+  const todaySales = sales.filter((s) => s.branch === effectiveShop && s.date === today);
+  const todayReturns = returns.filter((r) => r.branch === effectiveShop && r.date === today);
+  const todayExpenses = expenses.filter((e) => e.branch === effectiveShop && e.date === today);
   const salesTotal =
     todaySales.reduce((sum, s) => sum + s.total, 0) -
     todayReturns.reduce((sum, r) => sum + r.total, 0);
