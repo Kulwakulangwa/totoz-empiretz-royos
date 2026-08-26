@@ -1,4 +1,4 @@
-import { BranchId } from "@/lib/toto-data";
+import { BranchId, colors } from "@/lib/toto-data";
 import { cn } from "@/lib/utils";
 import { Store, TrendingUp, Users } from "lucide-react";
 
@@ -32,23 +32,25 @@ export function BranchCard({
     <button
       onClick={onClick}
       className={cn(
-        "group relative w-full p-6 text-left transition-all duration-200 rounded-xl border-2",
+        "group relative w-full p-5 text-left transition-all duration-200 rounded-2xl border-2",
         "hover:shadow-lg hover:-translate-y-1",
         isSelected
           ? "border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-500/20"
-          : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50/50"
+          : "border-[#F0EEF4] bg-white hover:border-blue-300 hover:bg-blue-50/50"
       )}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <Store className="w-5 h-5 text-gray-500 group-hover:text-blue-500 transition-colors" />
-            <h3 className="text-lg font-semibold text-gray-900">{name}</h3>
+            <h3 className="text-lg font-semibold" style={{ color: colors.textDark }}>
+              {name}
+            </h3>
           </div>
           {role && (
             <div className="mt-1 flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <span className="text-xs text-gray-500">{role}</span>
+              <span className="text-xs" style={{ color: colors.textMuted }}>{role}</span>
             </div>
           )}
         </div>
@@ -63,19 +65,21 @@ export function BranchCard({
 
       <div className="mt-4 flex items-end justify-between">
         <div>
-          <p className="text-sm text-gray-500">Today's Sales</p>
-          <p className="text-xl font-bold text-gray-900">{formattedSales}</p>
+          <p className="text-sm" style={{ color: colors.textMuted }}>Today's Sales</p>
+          <p className="text-xl font-bold" style={{ color: colors.textDark }}>
+            {formattedSales}
+          </p>
         </div>
         {userCount !== undefined && (
-          <div className="flex items-center gap-1 text-sm text-gray-500">
+          <div className="flex items-center gap-1 text-sm" style={{ color: colors.textMuted }}>
             <Users className="w-4 h-4" />
             <span>{userCount} staff</span>
           </div>
         )}
       </div>
 
-      {/* Hover effect indicator */}
-      <div className="absolute inset-0 rounded-xl pointer-events-none ring-1 ring-inset ring-transparent group-hover:ring-blue-500/20 transition-all" />
+      {/* Hover indicator */}
+      <div className="absolute inset-0 rounded-2xl pointer-events-none ring-1 ring-inset ring-transparent group-hover:ring-blue-500/20 transition-all" />
     </button>
   );
 }
