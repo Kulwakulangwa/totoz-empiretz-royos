@@ -53,22 +53,53 @@ function DashboardInner() {
     return [];
   }, [isOwner, staffProfile]);
 
-  // Compute all-shop metrics (today or total? Use total for summary)
+  // Compute all-shop metrics (total, not just today)
   const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
   const allExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const allProfit = allRevenue - sales.reduce((sum, s) => sum + s.cost, 0) - allExpenses;
   const allVat = sales.reduce((sum, s) => sum + s.vat, 0);
 
-  // Compute per-branch metrics for TODAY only
+  // ------------------------------------------------------------
+  // 🔧 FIXED: Compute per-branch metrics for TODAY only
+  // ------------------------------------------------------------
   const today = new Date().toISOString().slice(0, 10);
-  const branchSummaries = branches.map((b) => {
-    const branchSales = sales.filter((s) => s.branch === b.id && s.date === today);
-    const branchExpenses = expenses.filter((e) => e.branch === b.id && e.date === today);
 
-    const revenueToday = branchSales.reduce((sum, s) => sum + s.total, 0);
-    const expensesToday = branchExpenses.reduce((sum, e) => sum + e.amount, 0);
-    const costToday = branchSales.reduce((sum, s) => sum + s.cost, 0);
-    const vatToday = branchSales.reduce((sum, s) => sum + s.vat, 0);
+  // 1. Group sales by branch for today
+  const salesByBranch: Record<BranchId, { revenue: number; cost: number; vat: number; count: number }> = {};
+  branches.forEach(b => {
+    salesByBranch[b.id] = { revenue: 0, cost: 0, vat: 0, count: 0 };
+  });
+
+  sales.forEach(s => {
+    const branchId = s.branch;
+    if (branchId && s.date === today && salesByBranch[branchId]) {
+      salesByBranch[branchId].revenue += s.total || 0;
+      salesByBranch[branchId].cost += s.cost || 0;
+      salesByBranch[branchId].vat += s.vat || 0;
+      salesByBranch[branchId].count += 1;
+    }
+  });
+
+  // 2. Group expenses by branch for today
+  const expensesByBranch: Record<BranchId, number> = {};
+  branches.forEach(b => {
+    expensesByBranch[b.id] = 0;
+  });
+
+  expenses.forEach(e => {
+    const branchId = e.branch;
+    if (branchId && e.date === today && expensesByBranch[branchId] !== undefined) {
+      expensesByBranch[branchId] += e.amount || 0;
+    }
+  });
+
+  // 3. Build branch summaries
+  const branchSummaries = branches.map((b) => {
+    const sales = salesByBranch[b.id] || { revenue: 0, cost: 0, vat: 0 };
+    const expensesToday = expensesByBranch[b.id] || 0;
+    const revenueToday = sales.revenue;
+    const costToday = sales.cost;
+    const vatToday = sales.vat;
     const profitToday = revenueToday - costToday - expensesToday;
 
     return {
@@ -80,6 +111,9 @@ function DashboardInner() {
       vatToday,
     };
   });
+
+  // Debug: remove after verification
+  console.log('Branch summaries:', branchSummaries);
 
   useEffect(() => {
     if (accessibleBranches.length === 1 && !selectedBranch && !showBranchSelector) {
