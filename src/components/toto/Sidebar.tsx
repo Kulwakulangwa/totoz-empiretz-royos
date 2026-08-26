@@ -28,15 +28,16 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   const navigate = useNavigate();
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
 
+  // For now we show the first branch name (or a placeholder)
   const branchName = "Totoz Empire";
 
   return (
-    <aside className="hidden md:flex md:flex-col md:w-[220px] md:min-h-screen md:bg-white md:border-r md:border-[#F0EEF4] md:fixed md:left-0 md:top-0 md:z-40">
+    <aside className="hidden md:flex md:flex-col md:w-[220px] md:min-h-full md:bg-white md:border-r md:border-[#F0EEF4] md:flex-shrink-0">
       {/* Logo */}
       <div className="p-5 border-b border-[#F0EEF4]">
         <div className="flex items-center gap-3">
           <div
-            className="size-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+            className="size-10 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
             style={{
               background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
             }}
@@ -44,7 +45,7 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
             TE
           </div>
           <div>
-            <h1 className="text-lg font-bold" style={{ color: colors.textDark }}>
+            <h1 className="text-lg font-bold leading-tight" style={{ color: colors.textDark }}>
               Toto Empire
             </h1>
             <p className="text-xs" style={{ color: colors.textMuted }}>
@@ -58,7 +59,7 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
       <div className="px-4 py-3 border-b border-[#F0EEF4]">
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: colors.tealLight }}>
           <span className="text-sm">🏪</span>
-          <span className="text-sm font-medium" style={{ color: colors.textDark }}>
+          <span className="text-sm font-medium truncate" style={{ color: colors.textDark }}>
             {branchName}
           </span>
         </div>
@@ -83,8 +84,8 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
                 color: isActive ? colors.white : colors.textMuted,
               }}
             >
-              <span className="text-base">{iconMap[item.id] || "📄"}</span>
-              {item.label}
+              <span className="text-base flex-shrink-0">{iconMap[item.id] || "📄"}</span>
+              <span className="truncate">{item.label}</span>
             </button>
           );
         })}
@@ -121,8 +122,8 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
           onClick={signOut}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
         >
-          <LogOut className="size-4" />
-          Sign Out
+          <LogOut className="size-4 flex-shrink-0" />
+          <span>Sign Out</span>
         </button>
       </div>
     </aside>
