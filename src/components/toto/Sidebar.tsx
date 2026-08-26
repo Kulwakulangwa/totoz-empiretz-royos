@@ -7,7 +7,7 @@ import { LogOut, Plus } from "lucide-react";
 const iconMap: Record<string, string> = {
   overview: "📊",
   pos: "🛍️",
-  sales: "📋",    // ✅ added
+  sales: "📋",
   returns: "🔄",
   inventory: "📦",
   expenses: "💰",
