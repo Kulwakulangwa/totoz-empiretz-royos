@@ -1,28 +1,19 @@
 import { cn } from "@/lib/utils";
-import { branches, navItems, type BranchId, type SectionId } from "@/lib/toto-data";
+import { navItems, type BranchId, type SectionId, colors } from "@/lib/toto-data";
 import { useAuth } from "@/hooks/use-auth";
-import {
-  Home,
-  ShoppingBag,
-  RefreshCw,
-  Package,
-  DollarSign,
-  Users,
-  FileText,
-  Settings,
-  LogOut,
-  Store,
-} from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
+import { LogOut, Plus } from "lucide-react";
 
-const iconMap: Record<string, React.ReactNode> = {
-  overview: <Home className="w-4 h-4" />,
-  pos: <ShoppingBag className="w-4 h-4" />,
-  returns: <RefreshCw className="w-4 h-4" />,
-  inventory: <Package className="w-4 h-4" />,
-  expenses: <DollarSign className="w-4 h-4" />,
-  staff: <Users className="w-4 h-4" />,
-  reports: <FileText className="w-4 h-4" />,
-  settings: <Settings className="w-4 h-4" />,
+const iconMap: Record<string, string> = {
+  overview: "📊",
+  pos: "🛍️",
+  returns: "🔄",
+  inventory: "📦",
+  expenses: "💰",
+  staff: "👥",
+  reports: "📈",
+  settings: "⚙️",
+  vat: "🧾",
 };
 
 type Props = {
@@ -30,38 +21,51 @@ type Props = {
   section: SectionId;
   isOwner: boolean;
   onSection: (id: SectionId) => void;
-  // onShop is removed – branch switching is done via header/mobile
 };
 
 export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   const { signOut, user, role } = useAuth();
+  const navigate = useNavigate();
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
 
-  // Find the current branch name
-  const branchName = branches.find((b) => b.id === shop)?.name || shop;
+  const branchName = "Totoz Empire";
 
   return (
-    <aside className="hidden md:flex md:flex-col md:w-64 md:min-h-screen md:bg-white md:border-r md:border-border">
-      {/* Brand */}
-      <div className="p-4 border-b border-border">
-        <h1 className="text-xl font-bold text-gray-800">Toto Empire</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">{user?.email}</p>
-        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-          {role === "owner" ? "Owner" : "Cashier"}
+    <aside className="hidden md:flex md:flex-col md:w-[220px] md:min-h-screen md:bg-white md:border-r md:border-[#F0EEF4] md:fixed md:left-0 md:top-0 md:z-40">
+      {/* Logo */}
+      <div className="p-5 border-b border-[#F0EEF4]">
+        <div className="flex items-center gap-3">
+          <div
+            className="size-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+            style={{
+              background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
+            }}
+          >
+            TE
+          </div>
+          <div>
+            <h1 className="text-lg font-bold" style={{ color: colors.textDark }}>
+              Toto Empire
+            </h1>
+            <p className="text-xs" style={{ color: colors.textMuted }}>
+              Retail Management
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Current Branch (non‑interactive) */}
-      <div className="p-3 border-b border-border">
-        <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-50 rounded-md">
-          <Store className="w-4 h-4 text-blue-600" />
-          <span className="text-sm font-medium text-gray-700">{branchName}</span>
+      {/* Branch */}
+      <div className="px-4 py-3 border-b border-[#F0EEF4]">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: colors.tealLight }}>
+          <span className="text-sm">🏪</span>
+          <span className="text-sm font-medium" style={{ color: colors.textDark }}>
+            {branchName}
+          </span>
         </div>
       </div>
 
-      {/* Management Menu */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {visibleNav.map((item) => {
           const isActive = section === item.id;
           return (
@@ -69,26 +73,55 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
               key={item.id}
               onClick={() => onSection(item.id)}
               className={cn(
-                "flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                 isActive
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  ? "text-white shadow-sm"
+                  : "hover:bg-[#F7F7FA]"
               )}
+              style={{
+                background: isActive ? colors.primary : "transparent",
+                color: isActive ? colors.white : colors.textMuted,
+              }}
             >
-              {iconMap[item.id]}
+              <span className="text-base">{iconMap[item.id] || "📄"}</span>
               {item.label}
             </button>
           );
         })}
       </nav>
 
+      {/* New Goods CTA */}
+      <div className="px-3 py-3 border-t border-[#F0EEF4]">
+        <div
+          className="rounded-xl p-4 text-center border-2 border-dashed"
+          style={{
+            background: colors.lavenderLight,
+            borderColor: colors.primary + "40",
+          }}
+        >
+          <p className="text-sm font-medium" style={{ color: colors.primary }}>
+            + New Goods
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
+            Add products to inventory
+          </p>
+          <button
+            onClick={() => onSection("inventory")}
+            className="mt-2 mx-auto flex items-center justify-center size-8 rounded-full text-white transition-transform hover:scale-105"
+            style={{ background: colors.primary }}
+          >
+            <Plus className="size-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Footer */}
-      <div className="p-3 border-t border-border">
+      <div className="p-3 border-t border-[#F0EEF4]">
         <button
           onClick={signOut}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2 rounded-xl text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="size-4" />
           Sign Out
         </button>
       </div>
