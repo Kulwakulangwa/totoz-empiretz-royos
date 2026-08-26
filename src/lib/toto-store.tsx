@@ -431,7 +431,10 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     let imagePath: string | null = null;
 
     try {
-      imagePath = await uploadProductImage(sku, input.imageFile);
+      // Upload image first (if provided)
+      if (input.imageFile) {
+        imagePath = await uploadProductImage(sku, input.imageFile);
+      }
 
       const { data, error } = await supabase
         .from('products')
@@ -471,7 +474,10 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       await refreshData();
       return { ok: true, product };
     } catch (err: any) {
-      await removeProductImage(imagePath);
+      // Clean up uploaded image if product insertion fails
+      if (imagePath) {
+        await removeProductImage(imagePath);
+      }
       console.error('Error adding product:', err);
       return { ok: false, error: err.message };
     }
@@ -486,12 +492,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
     try {
       if (input.imageFile) {
+        // Upload new image
         uploadedImagePath = await uploadProductImage(sku, input.imageFile);
         nextImagePath = uploadedImagePath;
       } else if (input.removeImage) {
         nextImagePath = null;
       }
 
+      // Update product in database
       const { error } = await supabase
         .from('products')
         .update({
@@ -506,8 +514,9 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
-      if ((input.imageFile || input.removeImage) && oldProduct?.imagePath !== nextImagePath) {
-        await removeProductImage(oldProduct?.imagePath);
+      // Remove old image if replaced or removed
+      if ((input.imageFile || input.removeImage) && oldProduct?.imagePath && oldProduct.imagePath !== nextImagePath) {
+        await removeProductImage(oldProduct.imagePath);
       }
 
       commit(log("Product updated", `${name} · ${sku}`));
@@ -515,7 +524,11 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const product = ref.current.products.find(p => p.sku === sku);
       return { ok: true, product: product! };
     } catch (err: any) {
-      await removeProductImage(uploadedImagePath);
+      // Clean up newly uploaded image if update fails
+      if (uploadedImagePath) {
+        await removeProductImage(uploadedImagePath);
+      }
+      console.error('Error updating product:', err);
       return { ok: false, error: err.message };
     }
   }, [commit, refreshData]);
@@ -529,6 +542,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         .eq('sku', sku);
 
       if (error) throw error;
+      // Remove image from storage
       await removeProductImage(product?.imagePath);
       commit(log("Product removed", `${sku} deleted from inventory`));
       await refreshData();
@@ -563,9 +577,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  // ============================================
-  // ✅ FIXED: recordSale with proper payment method (lowercase)
-  // ============================================
+  // recordSale (fixed payment method)
   const recordSale = useCallback(async (input: {
     branch: BranchId;
     cashier: string;
@@ -578,7 +590,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const receiptNumber = ref.current.receipt;
     const cashierId = staffProfile?.id || user?.id || null;
 
-    // ✅ Convert payment method to lowercase for database
+    // Convert payment method to lowercase for database
     const paymentMethod = input.payment.toLowerCase() as "cash" | "lipa_namba";
 
     try {
