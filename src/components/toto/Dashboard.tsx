@@ -20,6 +20,7 @@ import {
   money,
   navItems,
   stockOf,
+  colors,
   type BranchId,
   type SectionId,
 } from "@/lib/toto-data";
@@ -27,9 +28,9 @@ import { TotoStoreProvider, useToto } from "@/lib/toto-store";
 import { useAuth } from "@/hooks/use-auth";
 
 const btn =
-  "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
+  "inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-[13px] font-medium transition-colors hover:bg-accent";
 const btnPrimary =
-  "inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-primary px-3.5 text-[13px] font-medium text-primary-foreground transition-opacity hover:opacity-90";
+  "inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-4 text-[13px] font-medium text-white transition-opacity hover:opacity-90";
 
 function DashboardInner() {
   const navigate = useNavigate();
@@ -39,12 +40,10 @@ function DashboardInner() {
   const isOwner = role === "owner";
   const cashier = user?.user_metadata?.["full_name"] ?? user?.email ?? "Staff";
 
-  // Branch selection state
   const [selectedBranch, setSelectedBranch] = useState<BranchId | null>(null);
   const [showBranchSelector, setShowBranchSelector] = useState(true);
   const [section, setSection] = useState<SectionId>("overview");
 
-  // Determine which branches the user can access
   const accessibleBranches = useMemo(() => {
     if (isOwner) return branches;
     if (staffProfile) {
@@ -54,7 +53,6 @@ function DashboardInner() {
     return [];
   }, [isOwner, staffProfile]);
 
-  // Auto-select if only one branch
   useEffect(() => {
     if (accessibleBranches.length === 1 && !selectedBranch && !showBranchSelector) {
       setSelectedBranch(accessibleBranches[0].id);
@@ -62,7 +60,6 @@ function DashboardInner() {
     }
   }, [accessibleBranches, selectedBranch, showBranchSelector]);
 
-  // If user has no branches, show error
   if (!authLoading && accessibleBranches.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
@@ -82,7 +79,6 @@ function DashboardInner() {
     );
   }
 
-  // Show branch selection page
   if (showBranchSelector) {
     return (
       <BranchSelectionPage
@@ -106,22 +102,19 @@ function DashboardInner() {
     );
   }
 
-  // Loading state
   if (authLoading || storeLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: colors.primary }} />
       </div>
     );
   }
 
-  // No branch selected but not showing selector (shouldn't happen)
   if (!selectedBranch) {
     setShowBranchSelector(true);
     return null;
   }
 
-  // Selected branch data
   const effectiveShop = selectedBranch;
   const data = branches.find((b) => b.id === effectiveShop) || branches[0];
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
@@ -148,28 +141,32 @@ function DashboardInner() {
 
   const metrics = [
     {
-      label: "Net sales today",
+      label: "Revenue",
       value: money(salesTotal),
-      note: todayReturns.length
-        ? `${todaySales.length} receipts · ${todayReturns.length} returns`
-        : todaySales.length
-          ? `${todaySales.length} receipts`
-          : "No sales recorded yet",
+      icon: "📈",
+      bg: colors.pinkBg,
+      color: colors.secondary,
     },
     {
-      label: "Expenses today",
+      label: "Expenses",
       value: money(expenseTotal),
-      note: todayExpenses.length ? `${todayExpenses.length} entries` : "No expenses recorded yet",
+      icon: "💳",
+      bg: colors.lavenderLight,
+      color: colors.primary,
     },
     {
-      label: "Gross profit",
+      label: "Profit",
       value: money(salesTotal - salesCost - expenseTotal),
-      note: "Net sales minus cost of goods and expenses",
+      icon: "💎",
+      bg: colors.tealLight,
+      color: colors.accent,
     },
     {
-      label: "VAT collected today",
+      label: "VAT",
       value: money(vatTotal),
-      note: `${lowStock.length} product(s) at or below minimum stock`,
+      icon: "🧾",
+      bg: "#FCE8E8",
+      color: "#E93FA0",
     },
   ];
 
@@ -200,106 +197,82 @@ function DashboardInner() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Branch Dashboard Header */}
-      <BranchDashboardHeader
-        branchName={data.name}
-        branchId={effectiveShop}
-        userEmail={user?.email}
-        role={role || undefined}
-        onSwitchBranch={handleSwitchBranch}
-        onLogout={() => {
-          signOut();
-          navigate({ to: "/auth" });
-        }}
-      />
+    <div className="min-h-screen" style={{ background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)` }}>
+      {/* Decorative Circles */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-10 right-20 w-32 h-32 rounded-full bg-white/10" />
+        <div className="absolute top-40 right-60 w-16 h-16 rounded-full bg-white/5" />
+        <div className="absolute bottom-20 left-10 w-24 h-24 rounded-full bg-white/8" />
+        <div className="absolute bottom-40 left-40 w-12 h-12 rounded-full bg-white/5" />
+      </div>
 
-      <div className="md:grid md:grid-cols-[240px_minmax(0,1fr)]">
-        {/* Sidebar: now only shows selected branch + management menu */}
-        <Sidebar
-          shop={effectiveShop}
-          section={activeSection}
-          isOwner={isOwner}
-          onSection={setSection}
-        />
+      {/* Main App Card */}
+      <div className="relative min-h-screen flex items-center justify-center p-4 md:p-6">
+        <div className="w-full max-w-[1440px] bg-white rounded-[32px] shadow-2xl overflow-hidden min-h-[90vh] max-h-[95vh] flex flex-col">
+          {/* Header */}
+          <BranchDashboardHeader
+            branchName={data.name}
+            branchId={effectiveShop}
+            userEmail={user?.email}
+            role={role || undefined}
+            onSwitchBranch={handleSwitchBranch}
+            onLogout={() => {
+              signOut();
+              navigate({ to: "/auth" });
+            }}
+          />
 
-        <main className="min-w-0 px-4 pt-6 pb-28 sm:px-6 lg:px-8">
-          <header className="mb-6 flex flex-col justify-between gap-4 border-b border-border pb-4 lg:flex-row lg:items-end">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-                {isOwner ? "Business overview" : `Point of sale — ${data.name}`}
-              </h1>
-              <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-muted-foreground">
-                {isOwner
-                  ? "Sales, returns, inventory, expenses, VAT receipts and reporting for this shop."
-                  : "Scan or search a product, build the receipt and confirm Cash or Lipa Namba payment."}
-              </p>
-            </div>
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar */}
+            <Sidebar
+              shop={effectiveShop}
+              section={activeSection}
+              isOwner={isOwner}
+              onSection={setSection}
+            />
 
-            <div className="flex flex-wrap gap-2">
-              {isOwner && (
-                <button className={btn} onClick={handleExport}>
-                  📊 Export report
-                </button>
+            {/* Main Content */}
+            <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
+              {activeSection === "overview" && isOwner && (
+                <OverviewSection shop={effectiveShop} metrics={metrics} />
               )}
-              <button
-                className={btn}
-                onClick={() => {
-                  signOut();
-                  navigate({ to: "/auth" });
-                }}
-              >
-                Sign out
-              </button>
-              <button className={btnPrimary} onClick={() => setSection("pos")}>
-                🧾 New sale
-              </button>
-            </div>
-          </header>
-
-          {isOwner && activeSection === "overview" && (
-            <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {metrics.map((metric) => (
-                <article key={metric.label} className="p-4 bg-white rounded-lg shadow-sm border border-gray-100">
-                  <div className="text-[12px] font-medium text-muted-foreground">{metric.label}</div>
-                  <div className="mt-2 font-mono text-xl font-bold">{metric.value}</div>
-                  <div className="mt-1 text-[12px] text-muted-foreground">{metric.note}</div>
-                </article>
-              ))}
-            </section>
-          )}
-
-          {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
-          {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-          {activeSection === "returns" && (
-            <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
-          )}
-          {activeSection === "inventory" && isOwner && <InventorySection shop={effectiveShop} />}
-          {activeSection === "expenses" && isOwner && <ExpensesSection shop={effectiveShop} />}
-          {activeSection === "staff" && isOwner && <StaffSection />}
-          {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
-          {activeSection === "settings" && isOwner && <SettingsSection />}
-        </main>
+              {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
+              {activeSection === "returns" && (
+                <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
+              )}
+              {activeSection === "inventory" && isOwner && <InventorySection shop={effectiveShop} />}
+              {activeSection === "expenses" && isOwner && <ExpensesSection shop={effectiveShop} />}
+              {activeSection === "staff" && isOwner && <StaffSection />}
+              {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
+              {activeSection === "settings" && isOwner && <SettingsSection />}
+            </main>
+          </div>
+        </div>
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-1 border-t border-border bg-card p-2 md:hidden shadow-lg">
+      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-0.5 bg-white border-t border-[#F0EEF4] p-1.5 md:hidden shadow-lg rounded-t-2xl">
         {visibleNav.slice(0, 5).map((item) => (
           <button
             key={item.id}
             onClick={() => setSection(item.id)}
             className={cn(
-              "flex flex-col items-center justify-center min-h-12 rounded-md px-1 text-[10px] font-medium text-muted-foreground transition-colors",
-              activeSection === item.id && "bg-primary/10 text-primary font-semibold",
+              "flex flex-col items-center justify-center min-h-12 rounded-xl px-1 text-[10px] font-medium transition-colors",
+              activeSection === item.id
+                ? "text-white"
+                : "text-[#8B889A]"
             )}
+            style={{
+              background: activeSection === item.id ? colors.primary : "transparent",
+            }}
           >
-            {item.icon && <span className="text-lg mb-0.5">{item.icon}</span>}
+            <span className="text-lg mb-0.5">{item.icon}</span>
             <span>{item.label}</span>
           </button>
         ))}
         <button
           onClick={handleSwitchBranch}
-          className="flex flex-col items-center justify-center min-h-12 rounded-md px-1 text-[10px] font-medium text-blue-600"
+          className="flex flex-col items-center justify-center min-h-12 rounded-xl px-1 text-[10px] font-medium text-[#5B3A96]"
         >
           <span className="text-lg mb-0.5">🏪</span>
           <span>Switch</span>
