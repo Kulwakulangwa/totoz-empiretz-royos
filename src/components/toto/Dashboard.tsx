@@ -12,6 +12,7 @@ import {
   PosSection,
   ReportsSection,
   ReturnsSection,
+  SalesSection,
   SettingsSection,
   StaffSection,
 } from "@/components/toto/sections";
@@ -53,23 +54,18 @@ function DashboardInner() {
     return [];
   }, [isOwner, staffProfile]);
 
-  // Compute all-shop metrics (total, not just today)
+  // Compute all-shop metrics (total)
   const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
   const allExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const allProfit = allRevenue - sales.reduce((sum, s) => sum + s.cost, 0) - allExpenses;
   const allVat = sales.reduce((sum, s) => sum + s.vat, 0);
 
-  // ------------------------------------------------------------
-  // 🔧 FIXED: Compute per-branch metrics for TODAY only
-  // ------------------------------------------------------------
+  // Compute per-branch metrics for TODAY only
   const today = new Date().toISOString().slice(0, 10);
-
-  // 1. Group sales by branch for today
   const salesByBranch: Record<BranchId, { revenue: number; cost: number; vat: number; count: number }> = {};
   branches.forEach(b => {
     salesByBranch[b.id] = { revenue: 0, cost: 0, vat: 0, count: 0 };
   });
-
   sales.forEach(s => {
     const branchId = s.branch;
     if (branchId && s.date === today && salesByBranch[branchId]) {
@@ -79,21 +75,16 @@ function DashboardInner() {
       salesByBranch[branchId].count += 1;
     }
   });
-
-  // 2. Group expenses by branch for today
   const expensesByBranch: Record<BranchId, number> = {};
   branches.forEach(b => {
     expensesByBranch[b.id] = 0;
   });
-
   expenses.forEach(e => {
     const branchId = e.branch;
     if (branchId && e.date === today && expensesByBranch[branchId] !== undefined) {
       expensesByBranch[branchId] += e.amount || 0;
     }
   });
-
-  // 3. Build branch summaries
   const branchSummaries = branches.map((b) => {
     const sales = salesByBranch[b.id] || { revenue: 0, cost: 0, vat: 0 };
     const expensesToday = expensesByBranch[b.id] || 0;
@@ -101,7 +92,6 @@ function DashboardInner() {
     const costToday = sales.cost;
     const vatToday = sales.vat;
     const profitToday = revenueToday - costToday - expensesToday;
-
     return {
       id: b.id,
       name: b.name,
@@ -111,9 +101,6 @@ function DashboardInner() {
       vatToday,
     };
   });
-
-  // Debug: remove after verification
-  console.log('Branch summaries:', branchSummaries);
 
   useEffect(() => {
     if (accessibleBranches.length === 1 && !selectedBranch && !showBranchSelector) {
@@ -291,6 +278,7 @@ function DashboardInner() {
             <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
               {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
               {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
+              {activeSection === "sales" && <SalesSection shop={effectiveShop} />}
               {activeSection === "returns" && (
                 <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
               )}
