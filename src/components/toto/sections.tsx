@@ -33,7 +33,7 @@ import {
   type ShopId,
 } from "@/lib/toto-data";
 import { branchLabel, useToto, type SaleLine, type SaveResult } from "@/lib/toto-store";
-import { ImageIcon, Scan, QrCode, Upload, X } from "lucide-react";
+import { Camera, ImageIcon, Scan, QrCode, Upload, X } from "lucide-react";
 
 export const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -786,8 +786,22 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <label className={cn(btn, "cursor-pointer")}>
+                      <Camera className="size-4" />
+                      <span>{imagePreview ? "Retake" : "Camera"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="sr-only"
+                        onChange={(e) => {
+                          chooseImage(e.target.files?.[0]);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    <label className={cn(btn, "cursor-pointer")}>
                       <Upload className="size-4" />
-                      <span>{imagePreview ? "Replace" : "Upload"}</span>
+                      <span>{imagePreview ? "Replace" : "Gallery"}</span>
                       <input
                         type="file"
                         accept="image/*"
