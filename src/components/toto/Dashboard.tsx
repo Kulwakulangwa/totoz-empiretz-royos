@@ -222,6 +222,7 @@ function DashboardInner() {
             }}
           />
 
+          {/* Main Flex Row */}
           <div className="flex flex-1 overflow-hidden">
             {/* Sidebar */}
             <Sidebar
@@ -233,9 +234,7 @@ function DashboardInner() {
 
             {/* Main Content */}
             <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
-              {activeSection === "overview" && isOwner && (
-                <OverviewSection shop={effectiveShop} metrics={metrics} />
-              )}
+              {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
               {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
               {activeSection === "returns" && (
                 <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
