@@ -1,4 +1,3 @@
-const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_EDGE = 512;
 const WEBP_QUALITY = 0.72;
 
@@ -22,17 +21,15 @@ export async function compressProductImage(file: File): Promise<CompressedProduc
     throw new Error("Choose an image file.");
   }
 
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("Choose an image smaller than 8 MB.");
-  }
-
   const objectUrl = URL.createObjectURL(file);
 
   try {
     const image = await loadImage(objectUrl);
-    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(image.naturalWidth, image.naturalHeight));
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
+    const sourceX = Math.round((image.naturalWidth - sourceSize) / 2);
+    const sourceY = Math.round((image.naturalHeight - sourceSize) / 2);
+    const width = Math.min(MAX_IMAGE_EDGE, sourceSize);
+    const height = width;
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
@@ -42,7 +39,7 @@ export async function compressProductImage(file: File): Promise<CompressedProduc
       throw new Error("This browser cannot compress images.");
     }
 
-    context.drawImage(image, 0, 0, width, height);
+    context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, 0, 0, width, height);
 
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, "image/webp", WEBP_QUALITY);
@@ -61,10 +58,6 @@ export async function compressProductImage(file: File): Promise<CompressedProduc
 export function productImagePreview(file: File) {
   if (!file.type.startsWith("image/")) {
     throw new Error("Choose an image file.");
-  }
-
-  if (file.size > MAX_IMAGE_BYTES) {
-    throw new Error("Choose an image smaller than 8 MB.");
   }
 
   return URL.createObjectURL(file);

@@ -521,6 +521,9 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [qrProduct, setQrProduct] = useState<Product | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const pickingImageRef = useRef(false);
   const [adjust, setAdjust] = useState<{
     sku: string;
     branch: ShopId;
@@ -536,6 +539,21 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
     };
   }, [imagePreview]);
+
+  useEffect(() => {
+    function releasePickerAfterReturn() {
+      window.setTimeout(() => {
+        pickingImageRef.current = false;
+      }, 800);
+    }
+
+    window.addEventListener("focus", releasePickerAfterReturn);
+    window.addEventListener("pageshow", releasePickerAfterReturn);
+    return () => {
+      window.removeEventListener("focus", releasePickerAfterReturn);
+      window.removeEventListener("pageshow", releasePickerAfterReturn);
+    };
+  }, []);
 
   function setPreview(next: string | null) {
     setImagePreview((current) => {
@@ -581,7 +599,15 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     setOpen(true);
   }
 
+  function startImagePick(input: HTMLInputElement | null) {
+    pickingImageRef.current = true;
+    input?.click();
+  }
+
   function chooseImage(file?: File) {
+    window.setTimeout(() => {
+      pickingImageRef.current = false;
+    }, 300);
     if (!file) return;
 
     try {
@@ -762,8 +788,27 @@ export function InventorySection({ shop }: { shop: BranchId }) {
         />
       )}
 
-      <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : closeProductDialog())}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          if (next) {
+            setOpen(true);
+            return;
+          }
+
+          if (pickingImageRef.current) {
+            setOpen(true);
+            return;
+          }
+
+          closeProductDialog();
+        }}
+      >
+        <DialogContent
+          className="max-h-[85vh] overflow-y-auto sm:max-w-lg"
+          onFocusOutside={(event) => event.preventDefault()}
+          onPointerDownOutside={(event) => event.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
             <DialogDescription>
@@ -782,36 +827,46 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                     {imagePreview ? "One compressed image selected" : "No image selected"}
                   </div>
                   <div className="mt-0.5 text-[12px] text-muted-foreground">
-                    Images are resized to 512px and saved as WebP.
+                    Images are cropped square, resized to 512px and saved as WebP.
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <label className={cn(btn, "cursor-pointer")}>
+                    <button
+                      className={btn}
+                      type="button"
+                      onClick={() => startImagePick(cameraInputRef.current)}
+                    >
                       <Camera className="size-4" />
                       <span>{imagePreview ? "Retake" : "Camera"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="sr-only"
-                        onChange={(e) => {
-                          chooseImage(e.target.files?.[0]);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
-                    <label className={cn(btn, "cursor-pointer")}>
+                    </button>
+                    <button
+                      className={btn}
+                      type="button"
+                      onClick={() => startImagePick(galleryInputRef.current)}
+                    >
                       <Upload className="size-4" />
                       <span>{imagePreview ? "Replace" : "Gallery"}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={(e) => {
-                          chooseImage(e.target.files?.[0]);
-                          e.target.value = "";
-                        }}
-                      />
-                    </label>
+                    </button>
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="sr-only"
+                      onChange={(e) => {
+                        chooseImage(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                    <input
+                      ref={galleryInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) => {
+                        chooseImage(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
                     {imagePreview && (
                       <button className={btn} type="button" onClick={removeImage}>
                         <X className="size-4" />
