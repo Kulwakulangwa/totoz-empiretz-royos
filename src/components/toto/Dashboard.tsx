@@ -53,6 +53,35 @@ function DashboardInner() {
     return [];
   }, [isOwner, staffProfile]);
 
+  // Compute all-shop metrics
+  const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
+  const allExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const allProfit = allRevenue - sales.reduce((sum, s) => sum + s.cost, 0) - allExpenses;
+  const allVat = sales.reduce((sum, s) => sum + s.vat, 0);
+
+  // Compute per-branch metrics
+  const branchSummaries = branches.map((b) => {
+    const branchSales = sales.filter((s) => s.branch === b.id);
+    const branchExpenses = expenses.filter((e) => e.branch === b.id);
+    const today = new Date().toISOString().slice(0, 10);
+    const todaySales = branchSales.filter((s) => s.date === today).reduce((sum, s) => sum + s.total, 0);
+    const todayExpenses = branchExpenses.filter((e) => e.date === today).reduce((sum, e) => sum + e.amount, 0);
+    const totalSales = branchSales.reduce((sum, s) => sum + s.total, 0);
+    const totalExpenses = branchExpenses.reduce((sum, e) => sum + e.amount, 0);
+    const profit = totalSales - branchSales.reduce((sum, s) => sum + s.cost, 0) - totalExpenses;
+    const lowStockCount = products.filter((p) => stockOf(p, b.id) <= p.min).length;
+    return {
+      id: b.id,
+      name: b.name,
+      todaySales,
+      todayExpenses,
+      totalSales,
+      totalExpenses,
+      profit,
+      lowStockCount,
+    };
+  });
+
   useEffect(() => {
     if (accessibleBranches.length === 1 && !selectedBranch && !showBranchSelector) {
       setSelectedBranch(accessibleBranches[0].id);
@@ -82,7 +111,7 @@ function DashboardInner() {
   if (showBranchSelector) {
     return (
       <BranchSelectionPage
-        branches={accessibleBranches}
+        branches={branchSummaries}
         onSelectBranch={(id) => {
           setSelectedBranch(id);
           setShowBranchSelector(false);
@@ -93,11 +122,10 @@ function DashboardInner() {
           signOut();
           navigate({ to: "/auth" });
         }}
-        getTodaySales={(id) => {
-          const today = new Date().toISOString().slice(0, 10);
-          const branchSales = sales.filter((s) => s.branch === id && s.date === today);
-          return branchSales.reduce((sum, s) => sum + s.total, 0);
-        }}
+        allRevenue={allRevenue}
+        allExpenses={allExpenses}
+        allProfit={allProfit}
+        allVat={allVat}
       />
     );
   }
@@ -224,7 +252,6 @@ function DashboardInner() {
 
           {/* Main Flex Row */}
           <div className="flex flex-1 overflow-hidden">
-            {/* Sidebar */}
             <Sidebar
               shop={effectiveShop}
               section={activeSection}
@@ -232,7 +259,6 @@ function DashboardInner() {
               onSection={setSection}
             />
 
-            {/* Main Content */}
             <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
               {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
               {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
