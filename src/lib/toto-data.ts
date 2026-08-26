@@ -50,6 +50,8 @@ export type Product = {
   sell: number;
   min: number;
   stock: Partial<Record<ShopId, number>>;
+  imagePath?: string | null;
+  imageUrl?: string | null;
 };
 
 export type Staff = {

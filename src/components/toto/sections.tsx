@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import {
@@ -9,6 +9,7 @@ import {
 } from "@/lib/staff.functions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { productImagePreview } from "@/lib/product-images";
 import { Panel, PanelHead, Pill, EmptyState, MiniCard } from "./primitives";
 import { Scanner } from "./Scanner";
 import { ProductQRCode } from "./QRCode";
@@ -31,8 +32,8 @@ import {
   type Product,
   type ShopId,
 } from "@/lib/toto-data";
-import { branchLabel, useToto, type SaleLine } from "@/lib/toto-store";
-import { Scan, QrCode } from "lucide-react";
+import { branchLabel, useToto, type SaleLine, type SaveResult } from "@/lib/toto-store";
+import { ImageIcon, Scan, QrCode, Upload, X } from "lucide-react";
 
 export const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -50,6 +51,31 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       <span className="text-[12px] font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
+  );
+}
+
+function ProductThumb({
+  src,
+  alt,
+  className,
+}: {
+  src?: string | null;
+  alt: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "grid shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-muted text-muted-foreground",
+        className ?? "size-10",
+      )}
+    >
+      {src ? (
+        <img src={src} alt={alt} className="h-full w-full object-cover" loading="lazy" />
+      ) : (
+        <ImageIcon className="size-4" aria-hidden="true" />
+      )}
+    </div>
   );
 }
 
@@ -126,7 +152,7 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Point of sale ---------------- */
 
-type CartItem = SaleLine & { stock: number };
+type CartItem = SaleLine & { stock: number; imageUrl?: string | null };
 
 export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const { products, recordSale, receipt } = useToto();
@@ -186,6 +212,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               sell: item.sell,
               buy: item.buy,
               stock,
+              imageUrl: item.imageUrl,
             },
           ];
     });
@@ -300,14 +327,17 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                   key={p.sku}
                   onClick={() => add(p)}
                   disabled={stock === 0}
-                  className="grid gap-1 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-accent disabled:opacity-40"
+                  className="flex min-h-[76px] items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-accent disabled:opacity-40"
                 >
-                  <strong className="text-[13px] font-semibold">{p.name}</strong>
-                  <span className="font-mono text-[11px] text-muted-foreground">
-                    {p.barcode} · {money(p.sell)}
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {stock > 0 ? `${stock} in stock` : "Out of stock"}
+                  <ProductThumb src={p.imageUrl} alt={p.name} className="size-11" />
+                  <span className="grid min-w-0 gap-1">
+                    <strong className="truncate text-[13px] font-semibold">{p.name}</strong>
+                    <span className="truncate font-mono text-[11px] text-muted-foreground">
+                      {p.barcode} · {money(p.sell)}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {stock > 0 ? `${stock} in stock` : "Out of stock"}
+                    </span>
                   </span>
                 </button>
               );
@@ -332,27 +362,30 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                 key={item.sku}
                 className="flex items-start justify-between gap-3 rounded-md border border-border p-3"
               >
-                <div>
-                  <strong className="text-[13px] font-semibold">{item.name}</strong>
-                  <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
-                    {item.sku}
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      className="size-7 rounded-md border border-border"
-                      onClick={() => step(item.sku, -1)}
-                      aria-label="Decrease quantity"
-                    >
-                      –
-                    </button>
-                    <strong className="w-5 text-center text-sm">{item.qty}</strong>
-                    <button
-                      className="size-7 rounded-md border border-border"
-                      onClick={() => step(item.sku, 1)}
-                      aria-label="Increase quantity"
-                    >
-                      +
-                    </button>
+                <div className="flex min-w-0 gap-3">
+                  <ProductThumb src={item.imageUrl} alt={item.name} className="size-10" />
+                  <div className="min-w-0">
+                    <strong className="block truncate text-[13px] font-semibold">{item.name}</strong>
+                    <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
+                      {item.sku}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        className="size-7 rounded-md border border-border"
+                        onClick={() => step(item.sku, -1)}
+                        aria-label="Decrease quantity"
+                      >
+                        –
+                      </button>
+                      <strong className="w-5 text-center text-sm">{item.qty}</strong>
+                      <button
+                        className="size-7 rounded-md border border-border"
+                        onClick={() => step(item.sku, 1)}
+                        aria-label="Increase quantity"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <strong className="font-mono text-sm">{money(item.sell * item.qty)}</strong>
@@ -447,7 +480,20 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
 
 /* ---------------- Inventory ---------------- */
 
-const emptyProduct = {
+type ProductForm = {
+  name: string;
+  sku: string;
+  barcode: string;
+  category: string;
+  buy: string;
+  sell: string;
+  min: string;
+  stock: Partial<Record<ShopId, string>>;
+  imageFile: File | null;
+  removeImage: boolean;
+};
+
+const emptyProduct: ProductForm = {
   name: "",
   sku: "",
   barcode: "",
@@ -455,7 +501,9 @@ const emptyProduct = {
   buy: "",
   sell: "",
   min: "",
-  stock: {} as Partial<Record<ShopId, string>>,
+  stock: {},
+  imageFile: null,
+  removeImage: false,
 };
 
 const stockLabel = (p: Product) => {
@@ -470,6 +518,8 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState(emptyProduct);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [qrProduct, setQrProduct] = useState<Product | null>(null);
   const [adjust, setAdjust] = useState<{
     sku: string;
@@ -481,9 +531,31 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const defaultShop: ShopId = shop === "all" ? "toto" : shop;
   const rows = products;
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  function setPreview(next: string | null) {
+    setImagePreview((current) => {
+      if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
+      return next;
+    });
+  }
+
+  function closeProductDialog() {
+    setOpen(false);
+    setSaving(false);
+    setEditing(null);
+    setForm({ ...emptyProduct, stock: {} });
+    setPreview(null);
+  }
+
   function openNew() {
     setEditing(null);
     setForm({ ...emptyProduct, stock: {} });
+    setPreview(null);
     setOpen(true);
   }
 
@@ -502,11 +574,33 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       sell: String(p.sell),
       min: String(p.min),
       stock,
+      imageFile: null,
+      removeImage: false,
     });
+    setPreview(p.imageUrl ?? null);
     setOpen(true);
   }
 
-  function save() {
+  function chooseImage(file?: File) {
+    if (!file) return;
+
+    try {
+      const preview = productImagePreview(file);
+      setPreview(preview);
+      setForm((current) => ({ ...current, imageFile: file, removeImage: false }));
+    } catch (err: any) {
+      toast("Image not accepted", {
+        description: err?.message || "Choose a different image.",
+      });
+    }
+  }
+
+  function removeImage() {
+    setPreview(null);
+    setForm((current) => ({ ...current, imageFile: null, removeImage: true }));
+  }
+
+  async function save() {
     if (!form.name.trim()) {
       toast("Product name is required.");
       return;
@@ -525,8 +619,21 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       sell: Number(form.sell) || 0,
       min: Number(form.min) || 0,
       stock,
+      imageFile: form.imageFile,
+      removeImage: form.removeImage,
     };
-    const result = editing ? updateProduct(editing, payload) : addProduct(payload);
+    setSaving(true);
+    let result: SaveResult;
+    try {
+      result = await (editing ? updateProduct(editing, payload) : addProduct(payload));
+    } catch (err: any) {
+      toast("Product could not be saved", {
+        description: err?.message || "Please try again.",
+      });
+      return;
+    } finally {
+      setSaving(false);
+    }
     if (!result.ok) {
       toast(result.error);
       return;
@@ -534,7 +641,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     toast(editing ? "Product updated" : "Product added", {
       description: `${result.product.name} · ${result.product.barcode}`,
     });
-    setOpen(false);
+    closeProductDialog();
   }
 
   return (
@@ -596,10 +703,15 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                 return (
                   <tr key={p.sku} className="border-b border-border/50 last:border-0">
                     <td className="px-2.5 py-3">
-                      <strong className="block font-semibold">{p.name}</strong>
-                      <span className="text-[12px] text-muted-foreground">
-                        {p.category} · {p.sku}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <ProductThumb src={p.imageUrl} alt={p.name} />
+                        <div className="min-w-0">
+                          <strong className="block truncate font-semibold">{p.name}</strong>
+                          <span className="block truncate text-[12px] text-muted-foreground">
+                            {p.category} · {p.sku}
+                          </span>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-2.5 py-3 text-[12px] text-muted-foreground">
                       {stockLabel(p)}
@@ -650,7 +762,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
         />
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : closeProductDialog())}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
@@ -659,6 +771,43 @@ export function InventorySection({ shop }: { shop: BranchId }) {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <span className="mb-1.5 block text-[12px] font-medium text-muted-foreground">
+                Product image
+              </span>
+              <div className="flex items-center gap-3 rounded-md border border-border bg-card p-3">
+                <ProductThumb src={imagePreview} alt={form.name || "Product image"} className="size-16" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-medium">
+                    {imagePreview ? "One compressed image selected" : "No image selected"}
+                  </div>
+                  <div className="mt-0.5 text-[12px] text-muted-foreground">
+                    Images are resized to 512px and saved as WebP.
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <label className={cn(btn, "cursor-pointer")}>
+                      <Upload className="size-4" />
+                      <span>{imagePreview ? "Replace" : "Upload"}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => {
+                          chooseImage(e.target.files?.[0]);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {imagePreview && (
+                      <button className={btn} type="button" onClick={removeImage}>
+                        <X className="size-4" />
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
             <Field label="Product name">
               <input
                 className={field}
@@ -730,11 +879,11 @@ export function InventorySection({ shop }: { shop: BranchId }) {
             </div>
           </div>
           <DialogFooter>
-            <button className={btn} onClick={() => setOpen(false)}>
+            <button className={btn} onClick={closeProductDialog}>
               Cancel
             </button>
-            <button className={btnPrimary} onClick={save}>
-              {editing ? "Save changes" : "Add product"}
+            <button className={btnPrimary} onClick={save} disabled={saving}>
+              {saving ? "Saving..." : editing ? "Save changes" : "Add product"}
             </button>
           </DialogFooter>
         </DialogContent>

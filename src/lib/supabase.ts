@@ -46,6 +46,7 @@ export type Product = {
   min_stock: number;
   unit: string;
   description: string | null;
+  image_path: string | null;
   is_active: boolean;
   created_by: string | null;
   created_at: string;

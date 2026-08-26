@@ -10,6 +10,7 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { compressProductImage } from "@/lib/product-images";
 import {
   branches,
   shopIds,
@@ -94,6 +95,8 @@ export type ProductInput = {
   sell: number;
   min: number;
   stock: Partial<Record<ShopId, number>>;
+  imageFile?: File | null;
+  removeImage?: boolean;
 };
 
 export type SaveResult = { ok: true; product: Product } | { ok: false; error: string };
@@ -160,8 +163,46 @@ const today = () => new Date().toISOString().slice(0, 10);
 const timeLabel = () =>
   new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
+const PRODUCT_IMAGE_BUCKET = "product-images";
 
 const norm = (v: string) => v.trim().toLowerCase();
+
+function productImageUrl(path?: string | null) {
+  if (!path) return null;
+  return supabase.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+function imagePathForProduct(sku: string) {
+  const safeSku = sku
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/(^-+|-+$)/g, "");
+  return `${safeSku || "product"}/${Date.now()}.webp`;
+}
+
+async function uploadProductImage(sku: string, file?: File | null) {
+  if (!file) return null;
+
+  const image = await compressProductImage(file);
+  const path = imagePathForProduct(sku);
+  const { error } = await supabase.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, image.blob, {
+    cacheControl: "31536000",
+    contentType: "image/webp",
+    upsert: true,
+  });
+
+  if (error) throw error;
+  return path;
+}
+
+async function removeProductImage(path?: string | null) {
+  if (!path) return;
+  const { error } = await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove([path]);
+  if (error) {
+    console.error("Error removing product image:", error);
+  }
+}
 
 function nextInternalBarcode(products: Product[]): string {
   const used = new Set(products.map((p) => p.barcode));
@@ -261,6 +302,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         sell: Number(p.selling_price) || 0,
         min: Number(p.min_stock) || 5,
         stock: { [getBranchIdFromUuid(p.branch_id)]: Number(p.quantity) || 0 } as Partial<Record<ShopId, number>>,
+        imagePath: p.image_path || null,
+        imageUrl: productImageUrl(p.image_path || null),
       }));
 
       let salesQuery = supabase
@@ -385,8 +428,11 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
     const branch = Object.keys(input.stock)[0] as ShopId || 'toto';
     const quantity = input.stock[branch] || 0;
+    let imagePath: string | null = null;
 
     try {
+      imagePath = await uploadProductImage(sku, input.imageFile);
+
       const { data, error } = await supabase
         .from('products')
         .insert({
@@ -401,6 +447,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           quantity: quantity,
           unit: 'pcs',
           is_active: true,
+          image_path: imagePath,
         })
         .select()
         .single();
@@ -416,12 +463,15 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         sell: Number(input.sell) || 0,
         min: Math.max(0, Number(input.min) || 0),
         stock: { [branch]: quantity } as Partial<Record<ShopId, number>>,
+        imagePath,
+        imageUrl: productImageUrl(imagePath),
       };
 
       commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode}`));
       await refreshData();
       return { ok: true, product };
     } catch (err: any) {
+      await removeProductImage(imagePath);
       console.error('Error adding product:', err);
       return { ok: false, error: err.message };
     }
@@ -430,8 +480,18 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
   const updateProduct = useCallback(async (sku: string, input: ProductInput): Promise<SaveResult> => {
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Product name is required." };
+    const oldProduct = ref.current.products.find((p) => p.sku === sku);
+    let nextImagePath = oldProduct?.imagePath ?? null;
+    let uploadedImagePath: string | null = null;
 
     try {
+      if (input.imageFile) {
+        uploadedImagePath = await uploadProductImage(sku, input.imageFile);
+        nextImagePath = uploadedImagePath;
+      } else if (input.removeImage) {
+        nextImagePath = null;
+      }
+
       const { error } = await supabase
         .from('products')
         .update({
@@ -440,28 +500,36 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           buying_price: Number(input.buy) || 0,
           selling_price: Number(input.sell) || 0,
           min_stock: Math.max(0, Number(input.min) || 0),
+          image_path: nextImagePath,
         })
         .eq('sku', sku);
 
       if (error) throw error;
+
+      if ((input.imageFile || input.removeImage) && oldProduct?.imagePath !== nextImagePath) {
+        await removeProductImage(oldProduct?.imagePath);
+      }
 
       commit(log("Product updated", `${name} · ${sku}`));
       await refreshData();
       const product = ref.current.products.find(p => p.sku === sku);
       return { ok: true, product: product! };
     } catch (err: any) {
+      await removeProductImage(uploadedImagePath);
       return { ok: false, error: err.message };
     }
   }, [commit, refreshData]);
 
   const removeProduct = useCallback(async (sku: string) => {
     try {
+      const product = ref.current.products.find((p) => p.sku === sku);
       const { error } = await supabase
         .from('products')
         .delete()
         .eq('sku', sku);
 
       if (error) throw error;
+      await removeProductImage(product?.imagePath);
       commit(log("Product removed", `${sku} deleted from inventory`));
       await refreshData();
     } catch (err: any) {
