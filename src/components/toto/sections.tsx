@@ -524,6 +524,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const pickingImageRef = useRef(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [adjust, setAdjust] = useState<{
     sku: string;
     branch: ShopId;
@@ -540,11 +541,13 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     };
   }, [imagePreview]);
 
+  // Extended delay to prevent dialog close during camera return
   useEffect(() => {
     function releasePickerAfterReturn() {
       window.setTimeout(() => {
         pickingImageRef.current = false;
-      }, 800);
+        setIsProcessingImage(false);
+      }, 2000); // increased to 2 seconds
     }
 
     window.addEventListener("focus", releasePickerAfterReturn);
@@ -568,6 +571,8 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     setEditing(null);
     setForm({ ...emptyProduct, stock: {} });
     setPreview(null);
+    pickingImageRef.current = false;
+    setIsProcessingImage(false);
   }
 
   function openNew() {
@@ -600,14 +605,21 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   }
 
   function startImagePick(input: HTMLInputElement | null) {
+    if (!input) return;
     pickingImageRef.current = true;
-    input?.click();
+    setIsProcessingImage(true);
+    // Clear the input value so that selecting the same file again triggers onChange
+    input.value = "";
+    input.click();
   }
 
   function chooseImage(file?: File) {
+    // Reset flags after a short delay, but the focus event will also reset after 2s
     window.setTimeout(() => {
       pickingImageRef.current = false;
-    }, 300);
+      setIsProcessingImage(false);
+    }, 600);
+
     if (!file) return;
 
     try {
@@ -796,7 +808,8 @@ export function InventorySection({ shop }: { shop: BranchId }) {
             return;
           }
 
-          if (pickingImageRef.current) {
+          // Prevent closing if we are picking an image or processing one
+          if (pickingImageRef.current || isProcessingImage) {
             setOpen(true);
             return;
           }
@@ -806,8 +819,17 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       >
         <DialogContent
           className="max-h-[85vh] overflow-y-auto sm:max-w-lg"
-          onFocusOutside={(event) => event.preventDefault()}
-          onPointerDownOutside={(event) => event.preventDefault()}
+          onFocusOutside={(event) => {
+            // Prevent closing when focus moves to camera/gallery
+            if (pickingImageRef.current || isProcessingImage) {
+              event.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(event) => {
+            if (pickingImageRef.current || isProcessingImage) {
+              event.preventDefault();
+            }
+          }}
         >
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
@@ -854,7 +876,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                       className="sr-only"
                       onChange={(e) => {
                         chooseImage(e.target.files?.[0]);
-                        e.target.value = "";
+                        e.target.value = ""; // Reset so same file can be reselected
                       }}
                     />
                     <input
