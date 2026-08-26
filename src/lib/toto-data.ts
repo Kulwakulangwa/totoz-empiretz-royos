@@ -13,7 +13,7 @@ export const branches: { id: BranchId; name: string }[] = [
 
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
-// Colors
+// Colors (unchanged)
 export const colors = {
   primary: "#5B3A96",
   primaryDeep: "#4C2E85",
@@ -32,12 +32,8 @@ export const colors = {
   gradientDeepPurple: "#3B1E66",
 };
 
-// ✅ money formatter
-export const money = (amount: number) => {
-  return `TZS ${amount.toLocaleString("en-US")}`;
-};
+export const money = (amount: number) => `TZS ${amount.toLocaleString("en-US")}`;
 
-// ✅ Expense categories
 export const expenseCategories = [
   "Rent",
   "Utilities",
@@ -51,7 +47,6 @@ export const expenseCategories = [
   "Other",
 ];
 
-// ✅ Reports configuration
 export const reports = [
   { id: "sales", label: "Sales Report" },
   { id: "inventory", label: "Inventory Report" },
@@ -107,23 +102,24 @@ export type NavItem = {
 export type SectionId =
   | "overview"
   | "pos"
+  | "sales"        // ✅ replaced "vat"
   | "returns"
   | "inventory"
   | "expenses"
   | "staff"
   | "reports"
-  | "settings"
-  | "vat";
+  | "settings";    // keep settings if you have a separate settings page
 
 export const navItems: NavItem[] = [
   { id: "overview", label: "Dashboard", ownerOnly: true, icon: "📊" },
   { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
+  { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },   // ✅ NEW
   { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
   { id: "inventory", label: "Goods", ownerOnly: true, icon: "📦" },
   { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
   { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
   { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
-  { id: "vat", label: "VAT / EFD", ownerOnly: true, icon: "🧾" },
+  // VAT/EFD removed – replaced by Sales above
   { id: "settings", label: "Settings", ownerOnly: true, icon: "⚙️" },
 ];
 
@@ -136,10 +132,7 @@ export const stockOf = (product: Product, branch: BranchId): number => {
   return product.stock[branch] ?? 0;
 };
 
-// ============================================
-// BRANCH UUID MAPPING FOR SUPABASE
-// ============================================
-
+// Branch UUID mapping (unchanged)
 export const BRANCH_UUID_MAP: Record<string, string> = {
   toto: "b25dbe78-c9a9-432e-9117-2fb152267c61",
   "totoz-empire": "b25dbe78-c9a9-432e-9117-2fb152267c61",
