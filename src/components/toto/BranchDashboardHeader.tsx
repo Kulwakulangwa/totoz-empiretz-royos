@@ -1,5 +1,5 @@
-import { BranchId } from "@/lib/toto-data";
-import { ArrowLeft, Store, LogOut } from "lucide-react";
+import { BranchId, colors } from "@/lib/toto-data";
+import { ArrowLeft, Store, LogOut, Bell, Search } from "lucide-react";
 
 interface BranchDashboardHeaderProps {
   branchName: string;
@@ -19,39 +19,67 @@ export function BranchDashboardHeader({
   onLogout,
 }: BranchDashboardHeaderProps) {
   return (
-    <div className="border-b border-gray-200 bg-white px-4 py-3 sm:px-6">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+    <div className="border-b border-[#F0EEF4] bg-white px-4 py-3 flex-shrink-0">
+      <div className="max-w-full flex flex-wrap items-center justify-between gap-3">
         {/* Left: Switch Branch */}
         <button
           onClick={onSwitchBranch}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-colors hover:bg-[#F7F7FA]"
+          style={{ color: colors.textMuted }}
         >
           <ArrowLeft className="w-4 h-4" />
           <span className="hidden sm:inline">Switch Branch</span>
           <span className="sm:hidden">Switch</span>
         </button>
 
-        {/* Center: Branch Info */}
-        <div className="flex items-center gap-3">
-          <Store className="w-5 h-5 text-blue-600" />
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">{branchName}</h1>
-            <p className="text-xs text-gray-500 capitalize">{role}</p>
+        {/* Center: Branch Info + Search */}
+        <div className="flex items-center gap-4 flex-1 max-w-md">
+          <div className="flex items-center gap-2">
+            <div
+              className="size-9 rounded-xl flex items-center justify-center"
+              style={{ background: colors.primary + "10" }}
+            >
+              <Store className="w-4 h-4" style={{ color: colors.primary }} />
+            </div>
+            <div>
+              <h1 className="text-sm font-semibold" style={{ color: colors.textDark }}>
+                {branchName}
+              </h1>
+              <p className="text-xs capitalize" style={{ color: colors.textMuted }}>
+                {role}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Right: User & Logout */}
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:block text-right">
-            <p className="text-sm text-gray-900">{userEmail}</p>
-            <p className="text-xs text-gray-500 capitalize">{role}</p>
+        {/* Right: User Actions */}
+        <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ background: colors.offWhite }}>
+            <Search className="w-4 h-4" style={{ color: colors.textMuted }} />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="bg-transparent border-none outline-none text-sm w-32"
+              style={{ color: colors.textDark }}
+            />
+          </div>
+          <button className="p-2 rounded-full hover:bg-[#F7F7FA] transition-colors relative">
+            <Bell className="w-5 h-5" style={{ color: colors.textMuted }} />
+            <span className="absolute top-1.5 right-1.5 size-2 rounded-full" style={{ background: colors.secondary }} />
+          </button>
+          <div className="hidden md:block text-right">
+            <p className="text-sm font-medium" style={{ color: colors.textDark }}>
+              {userEmail?.split("@")[0] || "User"}
+            </p>
+            <p className="text-xs capitalize" style={{ color: colors.textMuted }}>
+              {role}
+            </p>
           </div>
           <button
             onClick={onLogout}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 transition-colors rounded-lg hover:bg-red-50"
+            className="p-2 rounded-full hover:bg-red-50 transition-colors"
           >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Sign Out</span>
+            <LogOut className="w-5 h-5 text-red-500" />
           </button>
         </div>
       </div>
