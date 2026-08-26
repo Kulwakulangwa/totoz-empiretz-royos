@@ -35,6 +35,7 @@ import {
 } from "@/lib/toto-data";
 import { branchLabel, useToto, type SaleLine, type SaveResult } from "@/lib/toto-store";
 import { Camera, ImageIcon, Scan, QrCode, Upload, X } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 export const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -86,10 +87,9 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
   const { sales, expenses, activities } = useToto();
   const scopedName = shop === "all" ? "all shops" : branchLabel(shop);
 
-  // 🟢 Filter data by selected shop
+  // Filter data by selected shop
   const filteredSales = shop === "all" ? sales : sales.filter(s => s.branch === shop);
   const filteredExpenses = shop === "all" ? expenses : expenses.filter(e => e.branch === shop);
-  const filteredReturns = shop === "all" ? [] : []; // not used but kept for consistency
 
   const revenue = filteredSales.reduce((sum, s) => sum + s.total, 0);
   const cost = filteredSales.reduce((sum, s) => sum + s.cost, 0);
@@ -99,7 +99,7 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
 
   const metrics = [
     {
-      label: "Sales",   // 🟢 changed from "Revenue"
+      label: "Sales",
       value: money(revenue),
       icon: "📈",
       bg: colors.pinkBg,
@@ -1341,11 +1341,13 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Staff ---------------- */
 
-export function StaffSection() {
+export function StaffSection({ shop }: { shop: BranchId }) {
   const queryClient = useQueryClient();
   const listStaffFn = useServerFn(listStaff);
   const createStaffFn = useServerFn(createStaffAccount);
   const deleteStaffFn = useServerFn(deleteStaffAccount);
+  const { role } = useAuth();
+  const isOwner = role === "owner";
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -1353,8 +1355,11 @@ export function StaffSection() {
     email: "",
     password: "",
     role: "cashier" as "owner" | "cashier",
-    branch: "toto" as ShopId,
+    branch: shop, // auto‑set to current shop
   });
+
+  // Only show branches the user can assign
+  const availableBranches = isOwner ? realBranches : realBranches.filter(b => b.id === shop);
 
   const { data: people = [], isLoading, error } = useQuery({
     queryKey: ["staff-accounts"],
@@ -1512,8 +1517,9 @@ export function StaffSection() {
                 className={field}
                 value={form.branch}
                 onChange={(e) => setForm({ ...form, branch: e.target.value as ShopId })}
+                disabled={!isOwner}
               >
-                {realBranches.map((b) => (
+                {availableBranches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
                   </option>
