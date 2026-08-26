@@ -54,13 +54,13 @@ function DashboardInner() {
     return [];
   }, [isOwner, staffProfile]);
 
-  // Compute all-shop metrics (total)
+  // All‑shop metrics (total)
   const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
   const allExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
   const allProfit = allRevenue - sales.reduce((sum, s) => sum + s.cost, 0) - allExpenses;
   const allVat = sales.reduce((sum, s) => sum + s.vat, 0);
 
-  // Compute per-branch metrics for TODAY only
+  // Per‑branch metrics (today)
   const today = new Date().toISOString().slice(0, 10);
   const salesByBranch: Record<BranchId, { revenue: number; cost: number; vat: number; count: number }> = {};
   branches.forEach(b => {
@@ -86,19 +86,15 @@ function DashboardInner() {
     }
   });
   const branchSummaries = branches.map((b) => {
-    const sales = salesByBranch[b.id] || { revenue: 0, cost: 0, vat: 0 };
+    const salesData = salesByBranch[b.id] || { revenue: 0, cost: 0, vat: 0 };
     const expensesToday = expensesByBranch[b.id] || 0;
-    const revenueToday = sales.revenue;
-    const costToday = sales.cost;
-    const vatToday = sales.vat;
-    const profitToday = revenueToday - costToday - expensesToday;
     return {
       id: b.id,
       name: b.name,
-      revenueToday,
+      revenueToday: salesData.revenue,
       expensesToday,
-      profitToday,
-      vatToday,
+      profitToday: salesData.revenue - salesData.cost - expensesToday,
+      vatToday: salesData.vat,
     };
   });
 
@@ -184,34 +180,10 @@ function DashboardInner() {
   const lowStock = products.filter((p) => stockOf(p, effectiveShop) <= p.min);
 
   const metrics = [
-    {
-      label: "Revenue",
-      value: money(salesTotal),
-      icon: "📈",
-      bg: colors.pinkBg,
-      color: colors.secondary,
-    },
-    {
-      label: "Expenses",
-      value: money(expenseTotal),
-      icon: "💳",
-      bg: colors.lavenderLight,
-      color: colors.primary,
-    },
-    {
-      label: "Profit",
-      value: money(salesTotal - salesCost - expenseTotal),
-      icon: "💎",
-      bg: colors.tealLight,
-      color: colors.accent,
-    },
-    {
-      label: "VAT",
-      value: money(vatTotal),
-      icon: "🧾",
-      bg: "#FCE8E8",
-      color: "#E93FA0",
-    },
+    { label: "Sales", value: money(salesTotal), icon: "📈", bg: colors.pinkBg, color: colors.secondary },
+    { label: "Expenses", value: money(expenseTotal), icon: "💳", bg: colors.lavenderLight, color: colors.primary },
+    { label: "Profit", value: money(salesTotal - salesCost - expenseTotal), icon: "💎", bg: colors.tealLight, color: colors.accent },
+    { label: "VAT", value: money(vatTotal), icon: "🧾", bg: "#FCE8E8", color: "#E93FA0" },
   ];
 
   const handleExport = () => {
@@ -242,7 +214,6 @@ function DashboardInner() {
 
   return (
     <div className="min-h-screen" style={{ background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)` }}>
-      {/* Decorative Circles */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-10 right-20 w-32 h-32 rounded-full bg-white/10" />
         <div className="absolute top-40 right-60 w-16 h-16 rounded-full bg-white/5" />
@@ -250,10 +221,8 @@ function DashboardInner() {
         <div className="absolute bottom-40 left-40 w-12 h-12 rounded-full bg-white/5" />
       </div>
 
-      {/* Main App Card */}
       <div className="relative min-h-screen flex items-center justify-center p-4 md:p-6">
         <div className="w-full max-w-[1440px] bg-white rounded-[32px] shadow-2xl overflow-hidden min-h-[90vh] max-h-[95vh] flex flex-col">
-          {/* Header */}
           <BranchDashboardHeader
             branchName={data.name}
             branchId={effectiveShop}
@@ -266,14 +235,8 @@ function DashboardInner() {
             }}
           />
 
-          {/* Main Flex Row */}
           <div className="flex flex-1 overflow-hidden">
-            <Sidebar
-              shop={effectiveShop}
-              section={activeSection}
-              isOwner={isOwner}
-              onSection={setSection}
-            />
+            <Sidebar shop={effectiveShop} section={activeSection} isOwner={isOwner} onSection={setSection} />
 
             <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
               {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
@@ -284,7 +247,7 @@ function DashboardInner() {
               )}
               {activeSection === "inventory" && isOwner && <InventorySection shop={effectiveShop} />}
               {activeSection === "expenses" && isOwner && <ExpensesSection shop={effectiveShop} />}
-              {activeSection === "staff" && isOwner && <StaffSection />}
+              {activeSection === "staff" && isOwner && <StaffSection shop={effectiveShop} />}
               {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
               {activeSection === "settings" && isOwner && <SettingsSection />}
             </main>
@@ -292,7 +255,6 @@ function DashboardInner() {
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-0.5 bg-white border-t border-[#F0EEF4] p-1.5 md:hidden shadow-lg rounded-t-2xl">
         {visibleNav.slice(0, 5).map((item) => (
           <button
@@ -300,9 +262,7 @@ function DashboardInner() {
             onClick={() => setSection(item.id)}
             className={cn(
               "flex flex-col items-center justify-center min-h-12 rounded-xl px-1 text-[10px] font-medium transition-colors",
-              activeSection === item.id
-                ? "text-white"
-                : "text-[#8B889A]"
+              activeSection === item.id ? "text-white" : "text-[#8B889A]"
             )}
             style={{
               background: activeSection === item.id ? colors.primary : "transparent",
