@@ -7,13 +7,13 @@ import { LogOut, Plus } from "lucide-react";
 const iconMap: Record<string, string> = {
   overview: "📊",
   pos: "🛍️",
+  sales: "📋",    // ✅ added
   returns: "🔄",
   inventory: "📦",
   expenses: "💰",
   staff: "👥",
   reports: "📈",
   settings: "⚙️",
-  vat: "🧾",
 };
 
 type Props = {
@@ -28,7 +28,6 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   const navigate = useNavigate();
   const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
 
-  // For now we show the first branch name (or a placeholder)
   const branchName = "Totoz Empire";
 
   return (
