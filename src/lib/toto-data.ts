@@ -13,12 +13,31 @@ export const branches: { id: BranchId; name: string }[] = [
 
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 
-// ✅ money formatter - ADDED
+// Colors
+export const colors = {
+  primary: "#5B3A96",
+  primaryDeep: "#4C2E85",
+  secondary: "#E93FA0",
+  pinkLight: "#F7C6E0",
+  accent: "#3ECFC0",
+  tealLight: "#D7F5F0",
+  lavenderLight: "#EDE9FB",
+  pinkBg: "#FCE4F1",
+  white: "#FFFFFF",
+  offWhite: "#F7F7FA",
+  textDark: "#2B2740",
+  textMuted: "#8B889A",
+  gradientMint: "#BDEDE6",
+  gradientPink: "#E9AEDD",
+  gradientDeepPurple: "#3B1E66",
+};
+
+// ✅ money formatter
 export const money = (amount: number) => {
   return `TZS ${amount.toLocaleString("en-US")}`;
 };
 
-// ✅ Expense categories - ADDED
+// ✅ Expense categories
 export const expenseCategories = [
   "Rent",
   "Utilities",
@@ -32,7 +51,7 @@ export const expenseCategories = [
   "Other",
 ];
 
-// ✅ Reports configuration - ADDED
+// ✅ Reports configuration
 export const reports = [
   { id: "sales", label: "Sales Report" },
   { id: "inventory", label: "Inventory Report" },
@@ -82,7 +101,7 @@ export type NavItem = {
   id: SectionId;
   label: string;
   ownerOnly: boolean;
-  icon?: string;
+  icon: string;
 };
 
 export type SectionId =
@@ -97,14 +116,15 @@ export type SectionId =
   | "vat";
 
 export const navItems: NavItem[] = [
-  { id: "overview", label: "Overview", ownerOnly: true, icon: "📊" },
-  { id: "pos", label: "Point of sale", ownerOnly: false, icon: "🛍️" },
+  { id: "overview", label: "Dashboard", ownerOnly: true, icon: "📊" },
+  { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
   { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
-  { id: "inventory", label: "Inventory", ownerOnly: true, icon: "📦" },
+  { id: "inventory", label: "Goods", ownerOnly: true, icon: "📦" },
   { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
   { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
   { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
   { id: "vat", label: "VAT / EFD", ownerOnly: true, icon: "🧾" },
+  { id: "settings", label: "Settings", ownerOnly: true, icon: "⚙️" },
 ];
 
 export const INTERNAL_BARCODE_START = 1000000;
@@ -120,7 +140,6 @@ export const stockOf = (product: Product, branch: BranchId): number => {
 // BRANCH UUID MAPPING FOR SUPABASE
 // ============================================
 
-// Map branch IDs to Supabase UUIDs
 export const BRANCH_UUID_MAP: Record<string, string> = {
   toto: "b25dbe78-c9a9-432e-9117-2fb152267c61",
   "totoz-empire": "b25dbe78-c9a9-432e-9117-2fb152267c61",
@@ -132,12 +151,10 @@ export const BRANCH_UUID_MAP: Record<string, string> = {
   "marc-urembo": "b25dbe78-c9a9-432e-9117-2fb152267c61",
 };
 
-// ✅ Helper: Get UUID from branch ID
 export function getBranchUuid(branchId: string): string {
   return BRANCH_UUID_MAP[branchId] || BRANCH_UUID_MAP["toto"] || branchId;
 }
 
-// ✅ Helper: Get branch ID from UUID
 export function getBranchIdFromUuid(uuid: string): ShopId {
   for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
     if (value === uuid) {
@@ -149,12 +166,10 @@ export function getBranchIdFromUuid(uuid: string): ShopId {
   return "toto";
 }
 
-// ✅ Helper: Get all branch UUIDs
 export function getAllBranchUuids(): string[] {
   return Object.values(BRANCH_UUID_MAP);
 }
 
-// ✅ Helper: Get branch name from UUID
 export function getBranchNameFromUuid(uuid: string): string {
   for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
     if (value === uuid) {
@@ -165,7 +180,6 @@ export function getBranchNameFromUuid(uuid: string): string {
   return "Unknown";
 }
 
-// ✅ Helper: Get branch ID from branch name
 export function getBranchIdFromName(name: string): ShopId {
   const branch = branches.find((b) => b.name.toLowerCase() === name.toLowerCase());
   return branch?.id || "toto";
