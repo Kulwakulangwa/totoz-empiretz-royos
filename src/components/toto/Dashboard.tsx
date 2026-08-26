@@ -215,13 +215,12 @@ function DashboardInner() {
       />
 
       <div className="md:grid md:grid-cols-[240px_minmax(0,1fr)]">
+        {/* Sidebar: now only shows selected branch + management menu */}
         <Sidebar
           shop={effectiveShop}
           section={activeSection}
           isOwner={isOwner}
-          onShop={() => {}} // No-op since branch is fixed
           onSection={setSection}
-          hideBranches={true}
         />
 
         <main className="min-w-0 px-4 pt-6 pb-28 sm:px-6 lg:px-8">
