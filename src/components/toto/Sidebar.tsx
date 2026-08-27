@@ -26,7 +26,7 @@ type Props = {
 export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
-  const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
+  const visibleNav = isOwner ? navItems.filter((item) => item.id !== "sales") : [{ id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" }];
 
   const branchName = "Totoz Empire";
 

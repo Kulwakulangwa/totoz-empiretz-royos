@@ -167,9 +167,8 @@ function DashboardInner() {
 
   const effectiveShop = selectedBranch;
   const data = branches.find((b) => b.id === effectiveShop) || branches[0];
-  const visibleNav = navItems.filter((item) => isOwner || !item.ownerOnly);
-  const activeSection: SectionId =
-    isOwner || !navItems.find((n) => n.id === section)?.ownerOnly ? section : "overview";
+  const visibleNav = isOwner ? navItems.filter((item) => item.id !== "sales") : [{ id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" }];
+  const activeSection: SectionId = isOwner ? (section as SectionId) : "pos";
 
   const todaySales = sales.filter((s) => s.branch === effectiveShop && s.date === today);
   const todayReturns = returns.filter((r) => r.branch === effectiveShop && r.date === today);
@@ -245,17 +244,23 @@ function DashboardInner() {
             <Sidebar shop={effectiveShop} section={activeSection} isOwner={isOwner} onSection={setSection} />
 
             <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
-              {activeSection === "overview" && isOwner && <OverviewSection shop={effectiveShop} />}
-              {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-              {activeSection === "sales" && <SalesSection shop={effectiveShop} />}
-              {activeSection === "returns" && (
-                <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
+              {isOwner ? (
+                <>
+                  {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
+                  {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
+                  {activeSection === "sales" && <SalesSection shop={effectiveShop} />}
+                  {activeSection === "returns" && (
+                    <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
+                  )}
+                  {activeSection === "inventory" && <InventorySection shop={effectiveShop} />}
+                  {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
+                  {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
+                  {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
+                  {activeSection === "settings" && <SettingsSection />}
+                </>
+              ) : (
+                <PosSection shop={effectiveShop} cashier={cashier} />
               )}
-              {activeSection === "inventory" && isOwner && <InventorySection shop={effectiveShop} />}
-              {activeSection === "expenses" && isOwner && <ExpensesSection shop={effectiveShop} />}
-              {activeSection === "staff" && isOwner && <StaffSection shop={effectiveShop} />}
-              {activeSection === "reports" && isOwner && <ReportsSection shop={effectiveShop} />}
-              {activeSection === "settings" && isOwner && <SettingsSection />}
             </main>
           </div>
         </div>
