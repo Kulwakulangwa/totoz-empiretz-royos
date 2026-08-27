@@ -28,7 +28,6 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Listen for auth changes
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
@@ -40,7 +39,6 @@ export function useAuth() {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      // loading will be set to false after staff profile fetch
     });
 
     return () => sub.subscription.unsubscribe();
