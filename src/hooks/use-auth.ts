@@ -28,6 +28,7 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 1. Listen for auth changes (session only – no loading change)
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
@@ -39,6 +40,7 @@ export function useAuth() {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      // DO NOT set loading false here – we wait for staff profile
     });
 
     return () => sub.subscription.unsubscribe();
@@ -46,7 +48,7 @@ export function useAuth() {
 
   const user: User | null = session?.user ?? null;
 
-  // Fetch staff profile when user changes
+  // 2. Fetch staff profile – controls loading state
   useEffect(() => {
     if (!user) {
       setStaffProfile(null);
@@ -56,7 +58,7 @@ export function useAuth() {
     }
 
     let active = true;
-    setLoading(true);
+    setLoading(true); // start loading
 
     const fetchStaffProfile = async () => {
       try {
@@ -87,6 +89,7 @@ export function useAuth() {
             setStaffProfile(data);
             setRole(data.role);
           } else {
+            // No staff record – user may have been removed
             setStaffProfile(null);
             setRole(null);
             setError("No staff profile found.");
@@ -102,7 +105,7 @@ export function useAuth() {
         }
       } finally {
         if (active) {
-          setLoading(false);
+          setLoading(false); // ✅ now loading is false only after staff fetch
         }
       }
     };
