@@ -11,7 +11,6 @@ export function AuthPage() {
   const { signInWithMagicLink, error: authError, user } = useAuth();
   const navigate = useNavigate();
 
-  // If already logged in, redirect to dashboard
   if (user) {
     navigate({ to: "/dashboard" });
     return null;
@@ -30,7 +29,6 @@ export function AuthPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)` }}>
-      {/* Decorative circles */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-10 right-20 w-32 h-32 rounded-full bg-white/10" />
         <div className="absolute top-40 right-60 w-16 h-16 rounded-full bg-white/5" />
@@ -38,7 +36,6 @@ export function AuthPage() {
         <div className="absolute bottom-40 left-40 w-12 h-12 rounded-full bg-white/5" />
       </div>
 
-      {/* Main Card */}
       <div className="w-full max-w-md bg-white rounded-[32px] shadow-2xl overflow-hidden p-8">
         <div className="text-center">
           <div
