@@ -684,7 +684,11 @@ const emptyProduct: ProductForm = {
   removeImage: false,
 };
 
-const stockLabel = (p: Product) => {
+const stockLabel = (p: Product, shop?: BranchId) => {
+  if (shop && shop !== "all") {
+    return (p.stock[shop] ?? 0) > 0 ? `${branchLabel(shop)} ${(p.stock[shop] ?? 0)}` : "No stock yet";
+  }
+
   const parts = shopIds
     .filter((id) => (p.stock[id] ?? 0) > 0)
     .map((id) => `${branchLabel(id)} ${p.stock[id]}`);
@@ -764,8 +768,9 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   function openEdit(p: Product) {
     setEditing(p.sku);
     const stock: Partial<Record<ShopId, string>> = {};
-    for (const id of shopIds) {
-      if (p.stock[id] !== undefined) stock[id] = String(p.stock[id]);
+    const targetShop = shop === "all" ? defaultShop : shop;
+    if (p.stock[targetShop] !== undefined) {
+      stock[targetShop] = String(p.stock[targetShop]);
     }
     setForm({
       name: p.name,
@@ -868,7 +873,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     <Panel>
       <PanelHead
         title="Inventory"
-        description="One product identity per business, with stock tracked per shop."
+        description="One product identity per shop, with stock tracked for this branch."
       >
         <button
           className={btn}
@@ -934,7 +939,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                       </div>
                     </td>
                     <td className="px-2.5 py-3 text-[12px] text-muted-foreground">
-                      {stockLabel(p)}
+                      {stockLabel(p, shop)}
                     </td>
                     <td className="px-2.5 py-3 font-mono">{p.barcode}</td>
                     <td className="px-2.5 py-3 font-mono">{money(p.buy)}</td>
@@ -978,7 +983,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       ) : (
         <EmptyState
           title="No products yet"
-          copy="Register your products with SKU, barcode, buying and selling price, per-shop stock and minimum stock level to start tracking inventory."
+          copy="Register your products with SKU, barcode, buying and selling price, stock level and minimum stock to start tracking inventory."
         />
       )}
 
@@ -1014,7 +1019,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
             <DialogDescription>
-              Leave SKU or barcode blank to generate them automatically. Stock is entered per shop.
+              Leave SKU or barcode blank to generate them automatically. Stock is entered for this branch only.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1133,21 +1138,17 @@ export function InventorySection({ shop }: { shop: BranchId }) {
             </Field>
           </div>
           <div className="mt-1 grid gap-3">
-            <span className="text-[12px] font-medium text-muted-foreground">Stock per shop</span>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {shopIds.map((id) => (
-                <Field key={id} label={branchLabel(id)}>
-                  <input
-                    className={field}
-                    inputMode="numeric"
-                    value={form.stock[id] ?? ""}
-                    onChange={(e) =>
-                      setForm({ ...form, stock: { ...form.stock, [id]: e.target.value } })
-                    }
-                  />
-                </Field>
-              ))}
-            </div>
+            <span className="text-[12px] font-medium text-muted-foreground">Stock</span>
+            <Field label={`Stock in ${branchLabel(defaultShop)}`}>
+              <input
+                className={field}
+                inputMode="numeric"
+                value={form.stock[defaultShop] ?? ""}
+                onChange={(e) =>
+                  setForm({ ...form, stock: { ...form.stock, [defaultShop]: e.target.value } })
+                }
+              />
+            </Field>
           </div>
           <DialogFooter>
             <button className={btn} onClick={closeProductDialog}>
