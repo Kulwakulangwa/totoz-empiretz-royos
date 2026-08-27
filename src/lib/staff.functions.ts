@@ -65,24 +65,25 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     await assertOwner(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Normalize email to lowercase
+    const email = data.email.toLowerCase().trim();
     const branchUuid = getBranchUuid(data.branch);
     if (!branchUuid) {
       throw new Error(`Invalid branch: ${data.branch}`);
     }
 
-    // 1. Check if staff already exists with this email
+    // 1. Check if staff already exists with this email (case‑insensitive)
     const { data: existingStaff, error: checkError } = await supabaseAdmin
       .from("staff")
       .select("id, user_id, is_active")
-      .eq("email", data.email)
+      .ilike("email", email) // case‑insensitive match
       .maybeSingle();
 
     if (existingStaff) {
-      // Staff exists with this email
       if (existingStaff.is_active) {
-        throw new Error(`A staff account with email ${data.email} already exists and is active.`);
+        throw new Error(`A staff account with email ${email} already exists and is active.`);
       } else {
-        // Reactivate and update the staff record
+        // Reactivate and update
         const { error: updateError } = await supabaseAdmin
           .from("staff")
           .update({
@@ -93,13 +94,13 @@ export const createStaffAccount = createServerFn({ method: "POST" })
           })
           .eq("id", existingStaff.id);
         if (updateError) throw updateError;
-        return { id: existingStaff.id, email: data.email };
+        return { id: existingStaff.id, email: email };
       }
     }
 
     // 2. No existing staff – create auth user
     const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: data.email,
+      email: email,
       password: data.password,
       email_confirm: true,
       user_metadata: { full_name: data.fullName, role: data.role },
@@ -116,7 +117,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         user_id: userId,
         branch_id: branchUuid,
         full_name: data.fullName,
-        email: data.email,
+        email: email,
         role: data.role,
         is_active: true,
       });
@@ -126,7 +127,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       throw new Error(staffError.message);
     }
 
-    return { id: userId, email: data.email };
+    return { id: userId, email: email };
   });
 
 export const deleteStaffAccount = createServerFn({ method: "POST" })
