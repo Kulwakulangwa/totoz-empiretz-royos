@@ -47,6 +47,9 @@ const field =
 
 const realBranches = branches.slice(1);
 
+const normalizeBarcodeToken = (value: string) =>
+  value.trim().replace(/[\s_-]+/g, "").toUpperCase();
+
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="grid gap-1.5">
@@ -305,7 +308,13 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
       focusInput();
       return;
     }
-    const exact = available.find((p) => p.barcode.toLowerCase() === q || p.sku.toLowerCase() === q);
+    const normalizedQuery = normalizeBarcodeToken(q);
+    const exact = available.find((p) => {
+      const barcodeMatch = normalizeBarcodeToken(p.barcode) === normalizedQuery;
+      const skuMatch = normalizeBarcodeToken(p.sku) === normalizedQuery;
+      const nameMatch = normalizeBarcodeToken(p.name) === normalizedQuery;
+      return barcodeMatch || skuMatch || nameMatch;
+    });
     if (exact) {
       addItem(exact, "scan");
       setQuery("");
@@ -325,15 +334,16 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   function handleScan(data: string) {
     setScanningBarcode(false);
     setScanningQR(false);
-    const clean = data.trim().toLowerCase();
+    const clean = data.trim();
     if (!clean) return;
 
-    const match = available.find(
-      (p) =>
-        p.barcode.toLowerCase() === clean ||
-        p.sku.toLowerCase() === clean ||
-        p.name.toLowerCase() === clean,
-    );
+    const normalizedScan = normalizeBarcodeToken(clean);
+    const match = available.find((p) => {
+      const barcodeMatch = normalizeBarcodeToken(p.barcode) === normalizedScan;
+      const skuMatch = normalizeBarcodeToken(p.sku) === normalizedScan;
+      const nameMatch = normalizeBarcodeToken(p.name) === normalizedScan;
+      return barcodeMatch || skuMatch || nameMatch;
+    });
 
     if (!match) {
       toast("No product matches scanned data", { description: data });
@@ -816,7 +826,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     const payload = {
       name: form.name.trim(),
       sku: form.sku.trim(),
-      barcode: form.barcode.trim(),
+      barcode: normalizeBarcodeToken(form.barcode || form.sku),
       category: form.category.trim() || "General",
       buy: Number(form.buy) || 0,
       sell: Number(form.sell) || 0,
