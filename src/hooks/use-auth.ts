@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { getBranchIdFromUuid } from "@/lib/toto-data";
 
 export type AppRole = "owner" | "manager" | "cashier";
 
@@ -78,6 +79,12 @@ export function useAuth() {
 
         if (active) {
           if (data) {
+            const rawBranchId = data.branch?.id ?? data.branch_id;
+            const normalizedBranchId =
+              typeof rawBranchId === "string" && rawBranchId.length > 20
+                ? getBranchIdFromUuid(rawBranchId)
+                : rawBranchId;
+
             if (!data.is_active) {
               setError("Your account has been deactivated.");
               await supabase.auth.signOut();
@@ -86,7 +93,10 @@ export function useAuth() {
               setLoading(false);
               return;
             }
-            setStaffProfile(data);
+            setStaffProfile({
+              ...data,
+              branch_id: normalizedBranchId ?? "toto",
+            });
             setRole(data.role);
             setLoading(false);
           } else {
@@ -172,7 +182,16 @@ export function useAuth() {
 
       if (error) throw error;
       if (data) {
-        setStaffProfile(data);
+        const rawBranchId = data.branch?.id ?? data.branch_id;
+        const normalizedBranchId =
+          typeof rawBranchId === "string" && rawBranchId.length > 20
+            ? getBranchIdFromUuid(rawBranchId)
+            : rawBranchId;
+
+        setStaffProfile({
+          ...data,
+          branch_id: normalizedBranchId ?? "toto",
+        });
         setRole(data.role);
       } else {
         setStaffProfile(null);

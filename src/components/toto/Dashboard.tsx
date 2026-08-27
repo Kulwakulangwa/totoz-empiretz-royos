@@ -22,6 +22,7 @@ import {
   navItems,
   stockOf,
   colors,
+  getBranchIdFromUuid,
   type BranchId,
   type SectionId,
 } from "@/lib/toto-data";
@@ -48,7 +49,12 @@ function DashboardInner() {
   const accessibleBranches = useMemo(() => {
     if (isOwner) return branches;
     if (staffProfile) {
-      const assignedBranch = branches.find((b) => b.id === staffProfile.branch_id);
+      const rawBranchId = staffProfile.branch?.id ?? staffProfile.branch_id;
+      const branchId =
+        typeof rawBranchId === "string" && rawBranchId.length > 20
+          ? getBranchIdFromUuid(rawBranchId)
+          : rawBranchId;
+      const assignedBranch = branches.find((b) => b.id === branchId);
       return assignedBranch ? [assignedBranch] : [];
     }
     return [];
