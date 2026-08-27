@@ -271,6 +271,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
       const existing = prev.find((row) => row.sku === item.sku);
       const inCart = existing?.qty ?? 0;
       const stock = stockOf(item, activeBranch);
+      if (stock <= 0) {
+        toast(`${item.name} is out of stock in ${branchLabel(activeBranch)}.`);
+        return prev;
+      }
       if (inCart + 1 > stock) {
         toast(`Only ${stock} units of ${item.name} left in ${branchLabel(activeBranch)}.`);
         return prev;
@@ -316,6 +320,12 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
       return barcodeMatch || skuMatch || nameMatch;
     });
     if (exact) {
+      if (stockOf(exact, activeBranch) <= 0) {
+        toast(`${exact.name} is out of stock in ${branchLabel(activeBranch)}.`);
+        setQuery("");
+        focusInput();
+        return;
+      }
       addItem(exact, "scan");
       setQuery("");
       focusInput();
@@ -499,12 +509,19 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((p) => {
               const stock = stockOf(p, activeBranch);
+              const soldOut = stock <= 0;
               return (
                 <button
                   key={p.sku}
                   onClick={() => add(p)}
-                  disabled={stock === 0}
-                  className="flex min-h-[76px] items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors hover:bg-accent disabled:opacity-40"
+                  disabled={soldOut}
+                  className={cn(
+                    "flex min-h-[76px] items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors",
+                    soldOut
+                      ? "cursor-not-allowed border-dashed border-muted-foreground/40 bg-muted text-muted-foreground opacity-55"
+                      : "hover:bg-accent",
+                  )}
+                  title={soldOut ? `Out of stock in ${branchLabel(activeBranch)}` : undefined}
                 >
                   <ProductThumb src={p.imageUrl} alt={p.name} className="size-11" />
                   <span className="grid min-w-0 gap-1">
@@ -512,8 +529,8 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                     <span className="truncate font-mono text-[11px] text-muted-foreground">
                       {p.barcode} · {money(p.sell)}
                     </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {stock > 0 ? `${stock} in stock` : "Out of stock"}
+                    <span className={cn("text-[11px]", soldOut ? "text-red-500" : "text-muted-foreground")}>
+                      {soldOut ? "Out of stock" : `${stock} in stock`}
                     </span>
                   </span>
                 </button>
