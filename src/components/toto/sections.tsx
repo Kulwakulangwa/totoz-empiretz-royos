@@ -1355,11 +1355,9 @@ export function StaffSection({ shop }: { shop: BranchId }) {
     email: "",
     password: "",
     role: "cashier" as "owner" | "cashier",
-    branch: shop, // auto‑set to current shop
   });
 
-  // Only show branches the user can assign
-  const availableBranches = isOwner ? realBranches : realBranches.filter(b => b.id === shop);
+  const currentBranchName = branchLabel(shop);
 
   const { data: people = [], isLoading, error } = useQuery({
     queryKey: ["staff-accounts"],
@@ -1388,14 +1386,14 @@ export function StaffSection({ shop }: { shop: BranchId }) {
           email: form.email.trim().toLowerCase(),
           password: form.password,
           fullName: form.name.trim(),
-          branch: form.branch,
+          branch: shop, // fixed to current shop
           role: form.role,
         },
       });
       toast("Account created", {
         description: `${form.email.trim().toLowerCase()} can now sign in.`,
       });
-      setForm({ name: "", email: "", password: "", role: "cashier", branch: form.branch });
+      setForm({ name: "", email: "", password: "", role: "cashier" });
       setOpen(false);
       await refresh();
     } catch (e) {
@@ -1512,20 +1510,14 @@ export function StaffSection({ shop }: { shop: BranchId }) {
                 <option value="owner">Owner</option>
               </select>
             </Field>
-            <Field label="Assigned shop">
-              <select
-                className={field}
-                value={form.branch}
-                onChange={(e) => setForm({ ...form, branch: e.target.value as ShopId })}
-                disabled={!isOwner}
-              >
-                {availableBranches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div>
+              <label className="text-[12px] font-medium text-muted-foreground">
+                Assigned shop
+              </label>
+              <div className="mt-1.5 flex h-9 items-center rounded-md border border-border bg-muted px-3 text-[13px] text-foreground">
+                {currentBranchName}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <button className={btn} onClick={() => setOpen(false)}>
