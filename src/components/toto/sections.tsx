@@ -477,36 +477,47 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   }
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-      <Panel>
+    <div className="mx-auto max-w-[430px] space-y-3 md:max-w-none md:grid md:gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(290px,0.9fr)]">
+      <Panel className="rounded-[24px] border border-pink-100 bg-gradient-to-br from-pink-50 via-white to-violet-50 p-3 shadow-sm sm:p-4">
         <PanelHead title="Point of sale" description={`Assigned shop: ${assigned}`} />
-        <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
-          <div className="relative">
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+          <div className="relative col-span-2 sm:col-span-1">
             <input
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
               placeholder="Scan barcode, QR code or search product"
-              className="min-h-10 w-full rounded-md border border-border bg-card px-3 pr-9 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
+              className="min-h-11 w-full rounded-xl border border-pink-200 bg-white/90 px-3 pr-9 text-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
               autoFocus
             />
-            <Scan className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Scan className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-violet-500" />
           </div>
-          <button className={btn} onClick={() => setScanningBarcode(true)} aria-label="Scan barcode">
+          <button
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-3 text-[12px] font-medium text-violet-700 transition hover:bg-violet-50"
+            onClick={() => setScanningBarcode(true)}
+            aria-label="Scan barcode"
+          >
             <Scan className="size-4" />
             <span className="hidden sm:inline">Barcode</span>
           </button>
-          <button className={btn} onClick={() => setScanningQR(true)} aria-label="Scan QR code">
+          <button
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-pink-200 bg-white px-3 text-[12px] font-medium text-pink-700 transition hover:bg-pink-50"
+            onClick={() => setScanningQR(true)}
+            aria-label="Scan QR code"
+          >
             <QrCode className="size-4" />
             <span className="hidden sm:inline">QR Code</span>
           </button>
-          <button className={btnPrimary} onClick={() => add()}>
+          <button
+            className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 px-3 text-[12px] font-medium text-white shadow-sm transition hover:opacity-95 sm:col-span-1"
+            onClick={() => add()}
+          >
             Add item
           </button>
         </div>
         {filtered.length ? (
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             {filtered.map((p) => {
               const stock = stockOf(p, activeBranch);
               const soldOut = stock <= 0;
@@ -516,20 +527,20 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                   onClick={() => add(p)}
                   disabled={soldOut}
                   className={cn(
-                    "flex min-h-[76px] items-center gap-3 rounded-md border border-border bg-card p-3 text-left transition-colors",
+                    "flex min-h-[72px] items-center gap-3 rounded-xl border p-2.5 text-left shadow-sm transition-all",
                     soldOut
-                      ? "cursor-not-allowed border-dashed border-muted-foreground/40 bg-muted text-muted-foreground opacity-55"
-                      : "hover:bg-accent",
+                      ? "cursor-not-allowed border-dashed border-pink-200 bg-slate-100/70 text-slate-500 opacity-60"
+                      : "border-violet-100 bg-white/90 hover:border-violet-300 hover:shadow-md hover:bg-violet-50/80",
                   )}
                   title={soldOut ? `Out of stock in ${branchLabel(activeBranch)}` : undefined}
                 >
-                  <ProductThumb src={p.imageUrl} alt={p.name} className="size-11" />
-                  <span className="grid min-w-0 gap-1">
-                    <strong className="truncate text-[13px] font-semibold">{p.name}</strong>
-                    <span className="truncate font-mono text-[11px] text-muted-foreground">
+                  <ProductThumb src={p.imageUrl} alt={p.name} className="size-10" />
+                  <span className="grid min-w-0 flex-1 gap-1">
+                    <strong className="truncate text-[12.5px] font-semibold text-slate-800">{p.name}</strong>
+                    <span className="truncate font-mono text-[10px] text-slate-500">
                       {p.barcode} · {money(p.sell)}
                     </span>
-                    <span className={cn("text-[11px]", soldOut ? "text-red-500" : "text-muted-foreground")}>
+                    <span className={cn("text-[10px]", soldOut ? "text-red-500" : "text-violet-700")}>
                       {soldOut ? "Out of stock" : `${stock} in stock`}
                     </span>
                   </span>
@@ -545,7 +556,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         )}
       </Panel>
 
-      <Panel>
+      <Panel className="rounded-[24px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-pink-50 p-3 shadow-sm sm:p-4">
         <PanelHead title="Current sale">
           <Pill tone="neutral">Receipt #{String(receipt).padStart(4, "0")}</Pill>
         </PanelHead>
@@ -554,26 +565,24 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
             cart.map((item) => (
               <div
                 key={item.sku}
-                className="flex items-start justify-between gap-3 rounded-md border border-border p-3"
+                className="flex items-start justify-between gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"
               >
                 <div className="flex min-w-0 gap-3">
                   <ProductThumb src={item.imageUrl} alt={item.name} className="size-10" />
                   <div className="min-w-0">
-                    <strong className="block truncate text-[13px] font-semibold">{item.name}</strong>
-                    <div className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-                      {item.sku}
-                    </div>
+                    <strong className="block truncate text-[12.5px] font-semibold text-slate-800">{item.name}</strong>
+                    <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">{item.sku}</div>
                     <div className="mt-2 flex items-center gap-2">
                       <button
-                        className="size-7 rounded-md border border-border"
+                        className="size-7 rounded-md border border-violet-200 bg-white text-violet-700"
                         onClick={() => step(item.sku, -1)}
                         aria-label="Decrease quantity"
                       >
                         –
                       </button>
-                      <strong className="w-5 text-center text-sm">{item.qty}</strong>
+                      <strong className="w-5 text-center text-sm text-slate-800">{item.qty}</strong>
                       <button
-                        className="size-7 rounded-md border border-border"
+                        className="size-7 rounded-md border border-pink-200 bg-white text-pink-700"
                         onClick={() => step(item.sku, 1)}
                         aria-label="Increase quantity"
                       >
@@ -582,24 +591,24 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                     </div>
                   </div>
                 </div>
-                <strong className="font-mono text-sm">{money(item.sell * item.qty)}</strong>
+                <strong className="font-mono text-sm text-slate-800">{money(item.sell * item.qty)}</strong>
               </div>
             ))
           ) : (
-            <div className="rounded-md border border-dashed border-border px-4 py-8 text-center text-[13px] text-muted-foreground">
+            <div className="rounded-xl border border-dashed border-violet-200 bg-white/60 px-4 py-8 text-center text-[12px] text-slate-500">
               No items on this receipt yet.
             </div>
           )}
         </div>
 
-        <div className="mt-4 grid gap-1.5 border-t border-border pt-3 text-[13px]">
-          <div className="flex justify-between text-muted-foreground">
+        <div className="mt-4 grid gap-1.5 border-t border-violet-100 pt-3 text-[12px]">
+          <div className="flex justify-between text-slate-500">
             <span>Items</span>
-            <span className="font-mono text-foreground">{count}</span>
+            <span className="font-mono text-slate-800">{count}</span>
           </div>
           <div className="flex justify-between pt-1 text-base">
-            <span className="font-semibold">Total</span>
-            <strong className="font-mono">{money(total)}</strong>
+            <span className="font-semibold text-slate-800">Total</span>
+            <strong className="font-mono text-violet-700">{money(total)}</strong>
           </div>
         </div>
 
@@ -609,8 +618,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               key={method}
               onClick={() => setPay(method)}
               className={cn(
-                btn,
-                pay === method && "border-primary bg-primary text-primary-foreground",
+                "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 text-[12px] font-medium transition",
+                pay === method
+                  ? "border-violet-600 bg-gradient-to-r from-violet-600 to-pink-500 text-white shadow-sm"
+                  : "border-violet-200 bg-white text-violet-700 hover:bg-violet-50",
               )}
             >
               {method}
@@ -618,7 +629,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
           ))}
         </div>
         <button
-          className={cn(btnPrimary, "w-full")}
+          className="inline-flex w-full min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-pink-500 to-violet-600 px-3 text-[13px] font-medium text-white shadow-sm transition hover:opacity-95"
           onClick={async () => {
             if (!cart.length) {
               toast("Add at least one product before completing a sale.");
@@ -648,7 +659,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         >
           Complete sale
         </button>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+        <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
           Completing a sale reduces stock, records the receipt and logs cashier, shop and payment
           method.
         </p>
