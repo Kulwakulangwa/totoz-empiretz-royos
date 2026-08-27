@@ -40,6 +40,7 @@ export function useAuth() {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      // Do NOT set loading false here – we wait for staff profile
     });
 
     return () => sub.subscription.unsubscribe();
@@ -73,44 +74,37 @@ export function useAuth() {
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (error) {
-          // Network or DB error – we'll show an error state
-          setError(error.message);
-          setStaffProfile(null);
-          setRole(null);
-          // Don't sign out, let the user see the error
-          setLoading(false);
-          return;
-        }
+        if (error) throw error;
 
         if (active) {
           if (data) {
             if (!data.is_active) {
-              // Account deactivated – sign out
+              setError("Your account has been deactivated.");
               await supabase.auth.signOut();
-              // The session change will trigger the !user path and set loading false
-              // We keep loading true until that happens
+              setStaffProfile(null);
+              setRole(null);
+              setLoading(false);
               return;
             }
-            // Valid staff
             setStaffProfile(data);
             setRole(data.role);
             setLoading(false);
           } else {
-            // No staff record – sign out immediately
+            // No staff record – sign out
             await supabase.auth.signOut();
-            // Session will change; we keep loading true until then
-            // Do not set loading false here
-            return;
+            setStaffProfile(null);
+            setRole(null);
+            // Keep loading true until session clears
           }
         }
       } catch (err: any) {
-        // Unexpected error – show error and stop loading
         console.error("Error fetching staff profile:", err);
         setError(err.message);
-        setStaffProfile(null);
-        setRole(null);
-        setLoading(false);
+        if (active) {
+          setStaffProfile(null);
+          setRole(null);
+          setLoading(false);
+        }
       }
     };
 
