@@ -105,11 +105,28 @@ function DashboardInner() {
   });
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!isOwner) {
+      if (accessibleBranches.length === 0) {
+        setSelectedBranch(null);
+        setShowBranchSelector(true);
+        return;
+      }
+
+      const assignedBranch = accessibleBranches[0].id;
+      if (!selectedBranch || selectedBranch !== assignedBranch) {
+        setSelectedBranch(assignedBranch);
+      }
+      setShowBranchSelector(false);
+      return;
+    }
+
     if (accessibleBranches.length === 1 && !selectedBranch && !showBranchSelector) {
       setSelectedBranch(accessibleBranches[0].id);
       setShowBranchSelector(false);
     }
-  }, [accessibleBranches, selectedBranch, showBranchSelector]);
+  }, [authLoading, accessibleBranches, isOwner, selectedBranch, showBranchSelector]);
 
   if (!authLoading && accessibleBranches.length === 0) {
     return (
@@ -130,7 +147,11 @@ function DashboardInner() {
     );
   }
 
-  if (showBranchSelector) {
+  if (!isOwner && accessibleBranches.length > 0 && !selectedBranch) {
+    return null;
+  }
+
+  if (showBranchSelector && isOwner) {
     return (
       <BranchSelectionPage
         branches={branchSummaries}
