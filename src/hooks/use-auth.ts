@@ -40,7 +40,6 @@ export function useAuth() {
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      // DO NOT set loading false here – we wait for staff profile
     });
 
     return () => sub.subscription.unsubscribe();
@@ -58,7 +57,7 @@ export function useAuth() {
     }
 
     let active = true;
-    setLoading(true); // start loading
+    setLoading(true);
 
     const fetchStaffProfile = async () => {
       try {
@@ -74,39 +73,44 @@ export function useAuth() {
           .eq("user_id", user.id)
           .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+          // Network or DB error – we'll show an error state
+          setError(error.message);
+          setStaffProfile(null);
+          setRole(null);
+          // Don't sign out, let the user see the error
+          setLoading(false);
+          return;
+        }
 
         if (active) {
           if (data) {
             if (!data.is_active) {
-              setError("Your account has been deactivated.");
+              // Account deactivated – sign out
               await supabase.auth.signOut();
-              setStaffProfile(null);
-              setRole(null);
-              setLoading(false);
+              // The session change will trigger the !user path and set loading false
+              // We keep loading true until that happens
               return;
             }
+            // Valid staff
             setStaffProfile(data);
             setRole(data.role);
+            setLoading(false);
           } else {
-            // No staff record – user may have been removed
-            setStaffProfile(null);
-            setRole(null);
-            setError("No staff profile found.");
+            // No staff record – sign out immediately
             await supabase.auth.signOut();
+            // Session will change; we keep loading true until then
+            // Do not set loading false here
+            return;
           }
         }
       } catch (err: any) {
+        // Unexpected error – show error and stop loading
         console.error("Error fetching staff profile:", err);
         setError(err.message);
-        if (active) {
-          setStaffProfile(null);
-          setRole(null);
-        }
-      } finally {
-        if (active) {
-          setLoading(false); // ✅ now loading is false only after staff fetch
-        }
+        setStaffProfile(null);
+        setRole(null);
+        setLoading(false);
       }
     };
 
