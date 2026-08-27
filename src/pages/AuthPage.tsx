@@ -8,8 +8,14 @@ export function AuthPage() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const { signInWithMagicLink, error: authError } = useAuth();
+  const { signInWithMagicLink, error: authError, user } = useAuth();
   const navigate = useNavigate();
+
+  // If already logged in, redirect to dashboard
+  if (user) {
+    navigate({ to: "/dashboard" });
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,13 +27,6 @@ export function AuthPage() {
       setSent(true);
     }
   };
-
-  // If already logged in, redirect to dashboard
-  const { user } = useAuth();
-  if (user) {
-    navigate({ to: "/dashboard" });
-    return null;
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)` }}>
