@@ -32,18 +32,16 @@ export const listStaff = createServerFn({ method: "GET" })
     await assertOwner(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Fetch all staff records
     const { data: staff, error: staffError } = await supabaseAdmin
       .from("staff")
       .select("*");
     if (staffError) throw new Error(staffError.message);
 
-    // Map branch UUID to short name for frontend
     return staff.map((s) => ({
       id: s.id,
       email: s.email,
       fullName: s.full_name,
-      branch: getBranchIdFromUuid(s.branch_id), // convert UUID to short name
+      branch: getBranchIdFromUuid(s.branch_id),
       role: s.role,
       createdAt: s.created_at,
       isActive: s.is_active,
@@ -58,7 +56,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         email: z.string().email(),
         password: z.string().min(6).max(72),
         fullName: z.string().trim().min(1).max(80),
-        branch: z.string(), // short name (e.g., "toto") – will convert to UUID
+        branch: z.string(),
         role: z.enum(["owner", "cashier"]),
       })
       .parse(data),
@@ -67,13 +65,39 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     await assertOwner(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Convert branch short name to UUID
     const branchUuid = getBranchUuid(data.branch);
     if (!branchUuid) {
       throw new Error(`Invalid branch: ${data.branch}`);
     }
 
-    // 1. Create the auth user
+    // 1. Check if staff already exists with this email
+    const { data: existingStaff, error: checkError } = await supabaseAdmin
+      .from("staff")
+      .select("id, user_id, is_active")
+      .eq("email", data.email)
+      .maybeSingle();
+
+    if (existingStaff) {
+      // Staff exists with this email
+      if (existingStaff.is_active) {
+        throw new Error(`A staff account with email ${data.email} already exists and is active.`);
+      } else {
+        // Reactivate and update the staff record
+        const { error: updateError } = await supabaseAdmin
+          .from("staff")
+          .update({
+            full_name: data.fullName,
+            branch_id: branchUuid,
+            role: data.role,
+            is_active: true,
+          })
+          .eq("id", existingStaff.id);
+        if (updateError) throw updateError;
+        return { id: existingStaff.id, email: data.email };
+      }
+    }
+
+    // 2. No existing staff – create auth user
     const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: data.email,
       password: data.password,
@@ -85,7 +109,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     }
     const userId = created.user.id;
 
-    // 2. Insert the staff record
+    // 3. Insert staff record
     const { error: staffError } = await supabaseAdmin
       .from("staff")
       .insert({
@@ -97,7 +121,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         is_active: true,
       });
     if (staffError) {
-      // Rollback: delete the auth user if staff insert fails
+      // Rollback: delete the auth user
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error(staffError.message);
     }
@@ -112,7 +136,6 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
     await assertOwner(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Get the user_id from the staff record
     const { data: staff, error: staffFindError } = await supabaseAdmin
       .from("staff")
       .select("user_id")
@@ -122,16 +145,15 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
       throw new Error("Staff record not found");
     }
 
-    // Prevent self-deletion
     if (staff.user_id === context.userId) {
       throw new Error("You cannot remove your own account");
     }
 
-    // Delete the auth user
+    // Delete auth user
     const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(staff.user_id);
     if (deleteAuthError) throw new Error(deleteAuthError.message);
 
-    // Delete the staff record (cascade – but we delete explicitly)
+    // Delete staff record (explicit)
     const { error: deleteStaffError } = await supabaseAdmin
       .from("staff")
       .delete()
