@@ -64,27 +64,25 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     await assertOwner(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Normalize email (lowercase)
+    // Normalize email
     const email = data.email.toLowerCase().trim();
     const branchUuid = getBranchUuid(data.branch);
     if (!branchUuid) {
       throw new Error(`Invalid branch: ${data.branch}`);
     }
 
-    // 1. Check if staff already exists with this email (case‑insensitive)
-    const { data: existingStaff, error: checkError } = await supabaseAdmin
-      .from("staff")
-      .select("id, user_id, is_active")
-      .ilike("email", email) // case‑insensitive
-      .maybeSingle();
+    // 1. Find existing staff via RPC (case‑insensitive)
+    const { data: existingStaff, error: findError } = await supabaseAdmin
+      .rpc('find_staff_by_email', { email_input: email });
 
-    if (checkError) {
-      console.error("Error checking staff by email:", checkError);
+    if (findError) {
+      console.error("Error finding staff by email:", findError);
       throw new Error("Database error while checking staff");
     }
 
-    if (existingStaff) {
-      if (existingStaff.is_active) {
+    if (existingStaff && existingStaff.length > 0) {
+      const staff = existingStaff[0];
+      if (staff.is_active) {
         throw new Error(`A staff account with email ${email} already exists and is active.`);
       } else {
         // Reactivate and update
@@ -96,14 +94,14 @@ export const createStaffAccount = createServerFn({ method: "POST" })
             role: data.role,
             is_active: true,
           })
-          .eq("id", existingStaff.id);
+          .eq("id", staff.id);
         if (updateError) throw updateError;
         console.log(`✅ Reactivated inactive staff: ${email}`);
-        return { id: existingStaff.id, email: email };
+        return { id: staff.id, email: email };
       }
     }
 
-    // 2. No staff – check if auth user exists (to avoid duplicate auth error)
+    // 2. No staff – check if auth user exists (to link)
     let userId: string;
     try {
       const { data: authUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
@@ -128,7 +126,6 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         return { id: userId, email: email };
       }
     } catch (err: any) {
-      // Fall through to create new auth user if listing fails
       console.warn("Could not list auth users, creating new one:", err.message);
     }
 
