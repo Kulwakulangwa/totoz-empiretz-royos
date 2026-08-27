@@ -162,6 +162,15 @@ const StoreContext = createContext<Ctx | null>(null);
 const today = () => new Date().toISOString().slice(0, 10);
 const timeLabel = () =>
   new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const createReceiptNumber = () => {
+  const stamp = Date.now().toString().slice(-8);
+  const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `REC-${stamp}-${suffix}`;
+};
+const parseReceiptNumber = (receiptNumber?: string | null) => {
+  const digits = (receiptNumber || "").replace(/\D/g, "");
+  return digits ? Number(digits.slice(-8)) : 1;
+};
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 const PRODUCT_IMAGE_BUCKET = "product-images";
 
@@ -332,7 +341,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
         return {
           id: s.id,
-          receipt: parseInt(s.receipt_number?.replace('REC-', '') || '1'),
+          receipt: parseReceiptNumber(s.receipt_number),
           date: s.created_at?.split('T')[0] || today(),
           branch: getBranchIdFromUuid(s.branch_id),
           cashier: s.cashier_id || 'Unknown',
@@ -587,7 +596,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const total = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
     const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
     const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
-    const receiptNumber = ref.current.receipt;
+    const receiptNumber = createReceiptNumber();
+    const receiptDisplay = parseReceiptNumber(receiptNumber);
     const cashierId = staffProfile?.id || user?.id || null;
 
     // Convert payment method to lowercase for database
@@ -597,7 +607,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const { data: saleData, error: saleError } = await supabase
         .from('sales')
         .insert({
-          receipt_number: `REC-${receiptNumber}`,
+          receipt_number: receiptNumber,
           branch_id: getBranchUuid(branch),
           cashier_id: cashierId,
           payment_method: paymentMethod,
@@ -658,7 +668,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
       const sale: Sale = {
         id: saleData.id,
-        receipt: receiptNumber,
+        receipt: receiptDisplay,
         date: today(),
         branch,
         cashier: input.cashier,

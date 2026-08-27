@@ -65,13 +65,9 @@ export function useAuth() {
       try {
         const { data, error } = await supabase
           .from("staff")
-          .select(`
-            *,
-            branch:branches(
-              id,
-              name
-            )
-          `)
+          .select(
+            "id, user_id, branch_id, full_name, email, role, phone, is_active, created_at, updated_at"
+          )
           .eq("user_id", user.id)
           .maybeSingle();
 
@@ -79,11 +75,11 @@ export function useAuth() {
 
         if (active) {
           if (data) {
-            const rawBranchId = data.branch?.id ?? data.branch_id;
+            const rawBranchId = data.branch_id;
             const normalizedBranchId =
               typeof rawBranchId === "string" && rawBranchId.length > 20
                 ? getBranchIdFromUuid(rawBranchId)
-                : rawBranchId;
+                : rawBranchId || "toto";
 
             if (!data.is_active) {
               setError("Your account has been deactivated.");
@@ -95,7 +91,11 @@ export function useAuth() {
             }
             setStaffProfile({
               ...data,
-              branch_id: normalizedBranchId ?? "toto",
+              branch_id: normalizedBranchId,
+              branch: {
+                id: normalizedBranchId,
+                name: normalizedBranchId,
+              },
             });
             setRole(data.role);
             setLoading(false);
@@ -170,27 +170,27 @@ export function useAuth() {
     try {
       const { data, error } = await supabase
         .from("staff")
-        .select(`
-          *,
-          branch:branches(
-            id,
-            name
-          )
-        `)
+        .select(
+          "id, user_id, branch_id, full_name, email, role, phone, is_active, created_at, updated_at"
+        )
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (error) throw error;
       if (data) {
-        const rawBranchId = data.branch?.id ?? data.branch_id;
+        const rawBranchId = data.branch_id;
         const normalizedBranchId =
           typeof rawBranchId === "string" && rawBranchId.length > 20
             ? getBranchIdFromUuid(rawBranchId)
-            : rawBranchId;
+            : rawBranchId || "toto";
 
         setStaffProfile({
           ...data,
-          branch_id: normalizedBranchId ?? "toto",
+          branch_id: normalizedBranchId,
+          branch: {
+            id: normalizedBranchId,
+            name: normalizedBranchId,
+          },
         });
         setRole(data.role);
       } else {
