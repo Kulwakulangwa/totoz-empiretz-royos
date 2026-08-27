@@ -365,6 +365,97 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const total = cart.reduce((sum, i) => sum + i.sell * i.qty, 0);
   const count = cart.reduce((sum, i) => sum + i.qty, 0);
 
+  function printReceipt(sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number }) {
+    const printWindow = window.open("", "_blank", "width=420,height=700");
+    if (!printWindow) {
+      toast("Your browser blocked the receipt print popup.");
+      return;
+    }
+
+    const rows = sale.lines
+      .map(
+        (line) => `
+          <tr>
+            <td>${line.name}</td>
+            <td>${line.qty}</td>
+            <td>${money(line.sell)}</td>
+            <td>${money(line.sell * line.qty)}</td>
+          </tr>
+        `,
+      )
+      .join("");
+
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="UTF-8" />
+          <title>Receipt #${String(sale.receipt).padStart(4, "0")}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 18px;
+              color: #111827;
+              background: #fff;
+            }
+            .receipt {
+              width: 100%;
+              max-width: 360px;
+              margin: 0 auto;
+            }
+            h2, h3, p { margin: 0 0 8px; }
+            .center { text-align: center; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            td { font-size: 12px; padding: 4px 0; border-bottom: 1px dashed #e5e7eb; }
+            .meta { font-size: 12px; line-height: 1.5; }
+            .total { margin-top: 12px; font-size: 15px; font-weight: 700; }
+            @media print {
+              body { margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt">
+            <div class="center">
+              <h2>Toto Empire</h2>
+              <p>Retail Management</p>
+            </div>
+            <div class="meta">
+              <p>Receipt #: ${String(sale.receipt).padStart(4, "0")}</p>
+              <p>Date: ${sale.date}</p>
+              <p>Branch: ${branchLabel(sale.branch)}</p>
+              <p>Cashier: ${sale.cashier}</p>
+              <p>Payment: ${sale.payment}</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <td><strong>Item</strong></td>
+                  <td><strong>Qty</strong></td>
+                  <td><strong>Price</strong></td>
+                  <td><strong>Total</strong></td>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+            <div class="meta total">Grand Total: ${money(sale.total)}</div>
+            <div class="meta">VAT: ${money(sale.vat)}</div>
+            <div class="center" style="margin-top: 16px; font-size: 11px;">Thank you for shopping with Toto Empire</div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 250);
+  }
+
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
       <Panel>
@@ -518,6 +609,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               toast(`Receipt #${String(sale.receipt).padStart(4, "0")} completed`, {
                 description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
               });
+              printReceipt(sale);
               setCart([]);
               focusInput();
             } catch (err: any) {
