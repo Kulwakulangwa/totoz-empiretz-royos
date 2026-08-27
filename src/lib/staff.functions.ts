@@ -141,14 +141,19 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         return { id: staffByUserId.id, email };
       }
 
-      const { error: staffError } = await supabaseAdmin.from("staff").insert({
-        user_id: authUserId,
-        branch_id: branchUuid,
-        full_name: data.fullName,
-        email,
-        role: data.role,
-        is_active: true,
-      });
+      const { error: staffError } = await supabaseAdmin
+        .from("staff")
+        .upsert(
+          {
+            user_id: authUserId,
+            branch_id: branchUuid,
+            full_name: data.fullName,
+            email,
+            role: data.role,
+            is_active: true,
+          },
+          { onConflict: "user_id" },
+        );
       if (staffError) {
         throw new Error(staffError.message);
       }
@@ -168,14 +173,19 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     }
     const newUserId = created.user.id;
 
-    const { error: staffError } = await supabaseAdmin.from("staff").insert({
-      user_id: newUserId,
-      branch_id: branchUuid,
-      full_name: data.fullName,
-      email,
-      role: data.role,
-      is_active: true,
-    });
+    const { error: staffError } = await supabaseAdmin
+      .from("staff")
+      .upsert(
+        {
+          user_id: newUserId,
+          branch_id: branchUuid,
+          full_name: data.fullName,
+          email,
+          role: data.role,
+          is_active: true,
+        },
+        { onConflict: "user_id" },
+      );
     if (staffError) {
       await supabaseAdmin.auth.admin.deleteUser(newUserId);
       throw new Error(staffError.message);
