@@ -1946,12 +1946,48 @@ export function ReturnsSection({
 
 /* ---------------- Sales ---------------- */
 
-export function SalesSection({ shop }: { shop: BranchId }) {
-  const { sales } = useToto();
-  const effectiveShop = shop === "all" ? null : shop;
+export function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: boolean }) {
+  const { sales, refreshData } = useToto();
+  const [currentDay, setCurrentDay] = useState(() => new Date().toISOString().slice(0, 10));
 
-  const filteredSales = sales.filter(s => effectiveShop ? s.branch === effectiveShop : true);
-  const sortedSales = [...filteredSales].sort((a, b) => {
+  useEffect(() => {
+    const tick = () => {
+      const nextDay = new Date().toISOString().slice(0, 10);
+      if (nextDay !== currentDay) {
+        setCurrentDay(nextDay);
+        refreshData();
+      }
+    };
+
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const timeout = window.setTimeout(() => {
+      const dailyRefresh = () => {
+        const day = new Date().toISOString().slice(0, 10);
+        setCurrentDay(day);
+        refreshData();
+      };
+      dailyRefresh();
+      const interval = window.setInterval(dailyRefresh, 60 * 60 * 1000);
+      return () => window.clearInterval(interval);
+    }, nextMidnight.getTime() - now.getTime());
+
+    const intervalId = window.setInterval(tick, 60 * 1000);
+
+    return () => {
+      window.clearTimeout(timeout);
+      window.clearInterval(intervalId);
+    };
+  }, [currentDay, refreshData]);
+
+  const effectiveShop = shop === "all" ? null : shop;
+  const scopedSales = sales.filter((s) => (effectiveShop ? s.branch === effectiveShop : true));
+  const dayFilteredSales = isOwner
+    ? scopedSales
+    : scopedSales.filter((s) => s.date === currentDay);
+
+  const sortedSales = [...dayFilteredSales].sort((a, b) => {
     if (a.date > b.date) return -1;
     if (a.date < b.date) return 1;
     return b.receipt - a.receipt;

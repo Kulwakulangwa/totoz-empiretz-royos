@@ -269,7 +269,7 @@ function DashboardInner() {
                 <>
                   {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
                   {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-                  {activeSection === "sales" && <SalesSection shop={effectiveShop} />}
+                  {activeSection === "sales" && <SalesSection shop={effectiveShop} isOwner={isOwner} />}
                   {activeSection === "returns" && (
                     <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
                   )}
