@@ -188,8 +188,17 @@ function DashboardInner() {
 
   const effectiveShop = selectedBranch;
   const data = branches.find((b) => b.id === effectiveShop) || branches[0];
-  const visibleNav = isOwner ? navItems.filter((item) => item.id !== "sales") : [{ id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" }];
-  const activeSection: SectionId = isOwner ? (section as SectionId) : "pos";
+  const visibleNav = isOwner
+    ? navItems.filter((item) => item.id !== "sales")
+    : [
+        { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
+        { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
+      ];
+  const activeSection: SectionId = isOwner
+    ? (section as SectionId)
+    : section === "sales"
+      ? "sales"
+      : "pos";
 
   const todaySales = sales.filter((s) => s.branch === effectiveShop && s.date === today);
   const todayReturns = returns.filter((r) => r.branch === effectiveShop && r.date === today);
@@ -279,6 +288,8 @@ function DashboardInner() {
                   {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
                   {activeSection === "settings" && <SettingsSection />}
                 </>
+              ) : activeSection === "sales" ? (
+                <SalesSection shop={effectiveShop} isOwner={isOwner} />
               ) : (
                 <PosSection shop={effectiveShop} cashier={cashier} />
               )}
