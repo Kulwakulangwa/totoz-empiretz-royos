@@ -711,7 +711,9 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   } | null>(null);
 
   const defaultShop: ShopId = shop === "all" ? "toto" : shop;
-  const rows = products;
+  const rows = shop === "all"
+    ? products
+    : products.filter((p) => Object.prototype.hasOwnProperty.call(p.stock, shop));
 
   useEffect(() => {
     return () => {
@@ -823,6 +825,11 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       const value = Number(form.stock[id]) || 0;
       if (value > 0) stock[id] = value;
     }
+    const buildBranchStock = () => {
+      if (shop === "all") return stock;
+      const selectedQuantity = Number(form.stock[defaultShop]) || 0;
+      return selectedQuantity > 0 || Object.keys(form.stock).length === 0 ? { [defaultShop]: selectedQuantity } : {};
+    };
     const payload = {
       name: form.name.trim(),
       sku: form.sku.trim(),
@@ -831,7 +838,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       buy: Number(form.buy) || 0,
       sell: Number(form.sell) || 0,
       min: Number(form.min) || 0,
-      stock,
+      stock: buildBranchStock(),
       imageFile: form.imageFile,
       removeImage: form.removeImage,
     };

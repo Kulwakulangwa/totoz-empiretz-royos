@@ -435,8 +435,12 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: "This barcode is already assigned to another product." };
     }
 
-    const branch = Object.keys(input.stock)[0] as ShopId || 'toto';
-    const quantity = input.stock[branch] || 0;
+    const availableBranches = shopIds.filter((id) => Object.prototype.hasOwnProperty.call(input.stock, id));
+    const branch =
+      (staffProfile?.branch_id ? getBranchIdFromUuid(staffProfile.branch_id) : availableBranches[0]) ||
+      (Object.keys(input.stock)[0] as ShopId) ||
+      'toto';
+    const quantity = Number(input.stock[branch] ?? 0);
     let imagePath: string | null = null;
 
     try {
