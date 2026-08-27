@@ -64,21 +64,18 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     await assertOwner(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Normalize email
+    // Normalize email (lowercase)
     const email = data.email.toLowerCase().trim();
     const branchUuid = getBranchUuid(data.branch);
     if (!branchUuid) {
       throw new Error(`Invalid branch: ${data.branch}`);
     }
 
-    // 🔍 1. Check for existing staff (case‑insensitive using lower())
+    // 1. Check if staff already exists with this email (case‑insensitive)
     const { data: existingStaff, error: checkError } = await supabaseAdmin
       .from("staff")
       .select("id, user_id, is_active")
-      .filter("email", "eq", email) // eq is case‑sensitive, but we'll use lower in a custom filter
-      // Actually, we need to use a raw filter: .filter('email', 'eq', email) is case‑sensitive.
-      // So we use .ilike which is case‑insensitive.
-      .ilike("email", email)
+      .ilike("email", email) // case‑insensitive
       .maybeSingle();
 
     if (checkError) {
@@ -87,11 +84,10 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     }
 
     if (existingStaff) {
-      // Staff exists
       if (existingStaff.is_active) {
         throw new Error(`A staff account with email ${email} already exists and is active.`);
       } else {
-        // Reactivate
+        // Reactivate and update
         const { error: updateError } = await supabaseAdmin
           .from("staff")
           .update({
@@ -107,52 +103,47 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       }
     }
 
-    // 2. No staff – create auth user (catch duplicate auth error)
+    // 2. No staff – check if auth user exists (to avoid duplicate auth error)
     let userId: string;
     try {
-      const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: email,
-        password: data.password,
-        email_confirm: true,
-        user_metadata: { full_name: data.fullName, role: data.role },
-      });
-      if (authError) {
-        // If the error is about duplicate email in auth.users, we might have a mismatch
-        // between staff and auth. We can try to find the existing auth user and link it.
-        if (authError.message.includes("duplicate key")) {
-          // The email already exists in auth.users. Let's fetch that user.
-          const { data: authUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-          const existingAuthUser = authUsers?.users?.find(u => u.email?.toLowerCase() === email);
-          if (existingAuthUser) {
-            userId = existingAuthUser.id;
-            // Now create staff record for this existing auth user
-            const { error: staffError } = await supabaseAdmin
-              .from("staff")
-              .insert({
-                user_id: userId,
-                branch_id: branchUuid,
-                full_name: data.fullName,
-                email: email,
-                role: data.role,
-                is_active: true,
-              });
-            if (staffError) {
-              // If staff insert fails (e.g., email already exists in staff), throw.
-              throw new Error(staffError.message);
-            }
-            console.log(`✅ Created staff for existing auth user: ${email}`);
-            return { id: userId, email: email };
-          }
+      const { data: authUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      const existingAuthUser = authUsers?.users?.find(u => u.email?.toLowerCase() === email);
+      if (existingAuthUser) {
+        userId = existingAuthUser.id;
+        // Create staff record for existing auth user
+        const { error: staffError } = await supabaseAdmin
+          .from("staff")
+          .insert({
+            user_id: userId,
+            branch_id: branchUuid,
+            full_name: data.fullName,
+            email: email,
+            role: data.role,
+            is_active: true,
+          });
+        if (staffError) {
+          throw new Error(staffError.message);
         }
-        throw new Error(authError.message);
+        console.log(`✅ Created staff for existing auth user: ${email}`);
+        return { id: userId, email: email };
       }
-      userId = created.user.id;
-    } catch (authErr: any) {
-      // Re‑throw with a user-friendly message
-      throw new Error(authErr.message || "Could not create the account");
+    } catch (err: any) {
+      // Fall through to create new auth user if listing fails
+      console.warn("Could not list auth users, creating new one:", err.message);
     }
 
-    // 3. Insert staff record
+    // 3. Create new auth user and staff record
+    const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: email,
+      password: data.password,
+      email_confirm: true,
+      user_metadata: { full_name: data.fullName, role: data.role },
+    });
+    if (authError || !created.user) {
+      throw new Error(authError?.message ?? "Could not create the account");
+    }
+    userId = created.user.id;
+
     const { error: staffError } = await supabaseAdmin
       .from("staff")
       .insert({
@@ -164,7 +155,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         is_active: true,
       });
     if (staffError) {
-      // Rollback: delete the auth user
+      // Rollback
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error(staffError.message);
     }
