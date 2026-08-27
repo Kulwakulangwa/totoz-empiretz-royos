@@ -296,7 +296,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
       let productsQuery = supabase.from('products').select('*');
       if (!isOwner && userBranch) {
-        productsQuery = productsQuery.eq('branch_id', userBranch);
+        productsQuery = productsQuery.eq('branch_id', getBranchUuid(userBranch));
       }
 
       const { data: productsData, error: productsError } = await productsQuery;
@@ -649,24 +649,34 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         // Update inventory
         const { data: product, error: productError } = await supabase
           .from('products')
-          .select('quantity')
+          .select('quantity, branch_id')
           .eq('sku', line.sku)
-          .single();
+          .eq('branch_id', getBranchUuid(branch))
+          .maybeSingle();
 
         if (productError) {
-          console.error('Product not found:', line.sku, productError);
+          console.error('Product stock lookup error:', line.sku, productError);
           continue;
         }
 
-        if (product) {
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
-            .eq('sku', line.sku);
+        if (!product) {
+          console.error('Product not found for branch:', { sku: line.sku, branch });
+          continue;
+        }
 
-          if (updateError) {
-            console.error('Inventory update error:', updateError);
-          }
+        if ((product.quantity || 0) < line.qty) {
+          throw new Error(`Not enough stock for ${line.name} in ${branchLabel(branch)}.`);
+        }
+
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
+          .eq('sku', line.sku)
+          .eq('branch_id', getBranchUuid(branch));
+
+        if (updateError) {
+          console.error('Inventory update error:', updateError);
+          throw updateError;
         }
       }
 

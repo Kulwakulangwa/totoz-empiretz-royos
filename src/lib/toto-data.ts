@@ -142,11 +142,23 @@ export const BRANCH_UUID_MAP: Record<string, string> = {
   "marc-urembo": "b25dbe78-c9a9-432e-9117-2fb152267c61",
 };
 
+const looksLikeUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 export function getBranchUuid(branchId: string): string {
+  if (looksLikeUuid(branchId)) return branchId;
   return BRANCH_UUID_MAP[branchId] || BRANCH_UUID_MAP["toto"] || branchId;
 }
 
 export function getBranchIdFromUuid(uuid: string): ShopId {
+  if (!uuid) return "toto";
+  if (looksLikeUuid(uuid)) {
+    const match = Object.entries(BRANCH_UUID_MAP).find(([, value]) => value === uuid);
+    if (match && shopIds.includes(match[0] as ShopId)) {
+      return match[0] as ShopId;
+    }
+    const byName = branches.find((branch) => getBranchUuid(branch.id) === uuid);
+    if (byName) return byName.id;
+  }
   for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
     if (value === uuid) {
       if (shopIds.includes(key as ShopId)) {
