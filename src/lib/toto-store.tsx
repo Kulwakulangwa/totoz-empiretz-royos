@@ -294,6 +294,16 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const isOwner = role === "owner";
       const userBranch = staffProfile?.branch_id;
 
+      const { data: staffRows, error: staffError } = await supabase
+        .from('staff')
+        .select('id, full_name, email')
+        .eq('is_active', true);
+      if (staffError) throw staffError;
+
+      const cashierNameMap = Object.fromEntries(
+        (staffRows || []).map((person: any) => [person.id, person.full_name || person.email || 'Unknown'])
+      );
+
       let productsQuery = supabase.from('products').select('*');
       if (!isOwner && userBranch) {
         productsQuery = productsQuery.eq('branch_id', getBranchUuid(userBranch));
@@ -339,12 +349,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           buy: Number(item.unit_price) * 0.7 || 0,
         }));
 
+        const cashierName = cashierNameMap[s.cashier_id as string] || s.cashier_id || 'Unknown';
+
         return {
           id: s.id,
           receipt: parseReceiptNumber(s.receipt_number),
           date: s.created_at?.split('T')[0] || today(),
           branch: getBranchIdFromUuid(s.branch_id),
-          cashier: s.cashier_id || 'Unknown',
+          cashier: cashierName,
           payment: (s.payment_method as "Cash" | "Lipa Namba") || 'Cash',
           lines,
           total: Number(s.total) || 0,
@@ -603,6 +615,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const receiptNumber = createReceiptNumber();
     const receiptDisplay = parseReceiptNumber(receiptNumber);
     const cashierId = staffProfile?.id || user?.id || null;
+    const cashierDisplayName = staffProfile?.full_name || user?.user_metadata?.full_name || input.cashier || 'Unknown';
 
     // Convert payment method to lowercase for database
     const paymentMethod = input.payment.toLowerCase() as "cash" | "lipa_namba";
@@ -685,7 +698,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         receipt: receiptDisplay,
         date: today(),
         branch,
-        cashier: input.cashier,
+        cashier: cashierDisplayName,
         payment: input.payment,
         lines: input.lines,
         total,
@@ -695,7 +708,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
       commit((prev) => log(
         `Sale #${String(sale.receipt).padStart(4, "0")}`,
-        `${branchLabel(branch)} · ${input.cashier} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
+        `${branchLabel(branch)} · ${cashierDisplayName} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
       )({
         ...prev,
         sales: [sale, ...prev.sales],
