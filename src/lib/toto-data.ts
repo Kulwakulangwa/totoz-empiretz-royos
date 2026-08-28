@@ -101,7 +101,7 @@ export type NavItem = {
 export type SectionId =
   | "overview"
   | "pos"
-  | "sales"        // ✅ Replaced "vat"
+  | "sales"
   | "returns"
   | "inventory"
   | "expenses"
@@ -130,7 +130,9 @@ export const stockOf = (product: Product, branch: BranchId): number => {
   return product.stock[branch] ?? 0;
 };
 
-// Branch UUID mapping (unchanged)
+// ============================================================
+// Correct UUIDs per shop (matching your SQL migration)
+// ============================================================
 export const BRANCH_UUID_MAP: Record<string, string> = {
   toto: "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
   "totoz-empire": "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
