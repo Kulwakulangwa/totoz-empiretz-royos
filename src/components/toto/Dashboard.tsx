@@ -106,6 +106,11 @@ function DashboardInner() {
   });
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      navigate({ to: "/auth" });
+      return;
+    }
+
     if (authLoading) return;
 
     if (!isPrivileged) {
@@ -130,6 +135,13 @@ function DashboardInner() {
   }, [authLoading, accessibleBranches, isPrivileged, selectedBranch, showBranchSelector]);
 
   if (!authLoading && accessibleBranches.length === 0) {
+    const handleSignOut = async () => {
+      const { error } = await signOut();
+      if (!error) {
+        navigate({ to: "/auth" });
+      }
+    };
+
     return (
       <div className="flex items-center justify-center min-h-screen p-4">
         <div className="text-center max-w-md">
@@ -138,7 +150,7 @@ function DashboardInner() {
             You don't have access to any shop. Please contact your administrator.
           </p>
           <button
-            onClick={() => signOut()}
+            onClick={handleSignOut}
             className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
             Sign Out
