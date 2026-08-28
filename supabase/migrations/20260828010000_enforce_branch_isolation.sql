@@ -60,14 +60,27 @@ do $$
 declare
   totoz_uuid constant text := '6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a';
   legacy_uuid constant text := 'b25dbe78-c9a9-432e-9117-2fb152267c61';
-  table_name text;
+  target_table text;
+  branch_id_type text;
 begin
-  foreach table_name in array array['products', 'sales', 'expenses', 'staff', 'inventory_adjustments', 'activity_logs']
+  foreach target_table in array array['products', 'sales', 'expenses', 'staff', 'inventory_adjustments', 'activity_logs']
   loop
-    if to_regclass('public.' || table_name) is not null then
+    if to_regclass('public.' || target_table) is not null then
+      select c.udt_name
+      into branch_id_type
+      from information_schema.columns c
+      where c.table_schema = 'public'
+        and c.table_name = target_table
+        and c.column_name = 'branch_id';
+
+      if branch_id_type is null then
+        continue;
+      end if;
+
       execute format(
-        'update public.%I set branch_id = $1 where branch_id is null or branch_id::text = $2',
-        table_name
+        'update public.%I set branch_id = %s where branch_id is null or branch_id::text = $2',
+        target_table,
+        case when branch_id_type = 'uuid' then '$1::uuid' else '$1' end
       )
       using totoz_uuid, legacy_uuid;
     end if;
