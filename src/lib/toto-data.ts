@@ -132,40 +132,50 @@ export const stockOf = (product: Product, branch: BranchId): number => {
 
 // Branch UUID mapping (unchanged)
 export const BRANCH_UUID_MAP: Record<string, string> = {
-  toto: "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "totoz-empire": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  main: "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "main-branch": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "sunnozy-1": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "sunnozy-2": "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  mimis: "b25dbe78-c9a9-432e-9117-2fb152267c61",
-  "marc-urembo": "b25dbe78-c9a9-432e-9117-2fb152267c61",
+  toto: "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
+  "totoz-empire": "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
+  main: "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
+  "main-branch": "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
+  "sunnozy-1": "a8d51c6d-7660-492d-8430-2243d48a59ef",
+  "sunnozy-2": "d7280d3d-a2fd-41db-bd9d-c03d371d3d4d",
+  mimis: "7f624cb1-f0d1-47d3-bcd5-a9ad3ecdfb92",
+  "marc-urembo": "21967b1d-14d2-4d06-9d93-07bc7a2b153b",
 };
 
 const looksLikeUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 export function getBranchUuid(branchId: string): string {
-  if (looksLikeUuid(branchId)) return branchId;
-  return BRANCH_UUID_MAP[branchId] || BRANCH_UUID_MAP["toto"] || branchId;
+  if (!branchId) return BRANCH_UUID_MAP.toto;
+  const normalized = String(branchId).trim();
+  if (looksLikeUuid(normalized)) return normalized;
+
+  const direct = Object.entries(BRANCH_UUID_MAP).find(([key]) => key.toLowerCase() === normalized.toLowerCase());
+  if (direct) return direct[1];
+
+  const alias = Object.entries(BRANCH_UUID_MAP).find(([key]) => key.toLowerCase() === normalized.toLowerCase().replace(/\s+/g, "-"));
+  if (alias) return alias[1];
+
+  return BRANCH_UUID_MAP[normalized] || BRANCH_UUID_MAP["toto"] || normalized;
 }
 
 export function getBranchIdFromUuid(uuid: string): ShopId {
   if (!uuid) return "toto";
-  if (looksLikeUuid(uuid)) {
-    const match = Object.entries(BRANCH_UUID_MAP).find(([, value]) => value === uuid);
-    if (match && shopIds.includes(match[0] as ShopId)) {
-      return match[0] as ShopId;
-    }
-    const byName = branches.find((branch) => getBranchUuid(branch.id) === uuid);
-    if (byName) return byName.id;
+  const normalized = String(uuid).trim();
+
+  if (normalized && !looksLikeUuid(normalized)) {
+    const direct = Object.entries(BRANCH_UUID_MAP).find(([key]) => key.toLowerCase() === normalized.toLowerCase());
+    if (direct && shopIds.includes(direct[0] as ShopId)) return direct[0] as ShopId;
+    return "toto";
   }
-  for (const [key, value] of Object.entries(BRANCH_UUID_MAP)) {
-    if (value === uuid) {
-      if (shopIds.includes(key as ShopId)) {
-        return key as ShopId;
-      }
-    }
+
+  const match = Object.entries(BRANCH_UUID_MAP).find(([, value]) => value.toLowerCase() === normalized.toLowerCase());
+  if (match && shopIds.includes(match[0] as ShopId)) {
+    return match[0] as ShopId;
   }
+
+  const byName = branches.find((branch) => getBranchUuid(branch.id) === normalized);
+  if (byName) return byName.id as ShopId;
+
   return "toto";
 }
 
