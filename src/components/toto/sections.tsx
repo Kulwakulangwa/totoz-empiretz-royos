@@ -1338,17 +1338,22 @@ export function InventorySection({ shop }: { shop: BranchId }) {
 export function ExpensesSection({ shop }: { shop: BranchId }) {
   const { expenses, addExpense, removeExpense } = useToto();
   const [open, setOpen] = useState(false);
+  const fixedBranch: BranchId = shop === "all" ? "toto" : shop;
   const [form, setForm] = useState({
     date: new Date().toISOString().slice(0, 10),
-    branch: (shop === "all" ? "toto" : shop) as BranchId,
+    branch: fixedBranch,
     category: expenseCategories[0] ?? "Other",
     description: "",
     amount: "",
   });
 
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, branch: fixedBranch }));
+  }, [fixedBranch]);
+
   const rows = expenses
     .map((e, index) => ({ ...e, index }))
-    .filter((e) => shop === "all" || e.branch === shop);
+    .filter((e) => e.branch === fixedBranch);
   const totalSpend = rows.reduce((s, e) => s + e.amount, 0);
 
   return (
@@ -1444,18 +1449,10 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
               />
             </Field>
-            <Field label="Branch">
-              <select
-                className={field}
-                value={form.branch}
-                onChange={(e) => setForm({ ...form, branch: e.target.value as BranchId })}
-              >
-                {realBranches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
+            <Field label="Shop">
+              <div className="flex h-9 items-center rounded-md border border-border bg-muted px-3 text-[13px] text-foreground">
+                {branchLabel(fixedBranch)}
+              </div>
             </Field>
             <Field label="Category">
               <select
@@ -1500,7 +1497,7 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
                 }
                 addExpense({
                   date: form.date,
-                  branch: form.branch,
+                  branch: fixedBranch,
                   category: form.category,
                   description: form.description.trim() || form.category,
                   amount,
