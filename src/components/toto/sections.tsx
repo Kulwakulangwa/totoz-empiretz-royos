@@ -385,8 +385,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const total = cart.reduce((sum, i) => sum + i.sell * i.qty, 0);
   const count = cart.reduce((sum, i) => sum + i.qty, 0);
 
-  function printReceipt(sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number }) {
-    const printWindow = window.open("", "_blank", "width=420,height=700");
+  function renderReceiptWindow(
+    sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number },
+    printWindow: Window | null,
+  ) {
     if (!printWindow) {
       toast("Your browser blocked the receipt print popup.");
       return;
@@ -636,6 +638,8 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               return;
             }
 
+            const printWindow = window.open("", "_blank", "width=420,height=700");
+
             try {
               const sale = await recordSale({
                 branch: activeBranch,
@@ -647,10 +651,11 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               toast(`Receipt #${String(sale.receipt).padStart(4, "0")} completed`, {
                 description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
               });
-              printReceipt(sale);
+              renderReceiptWindow(sale, printWindow);
               setCart([]);
               focusInput();
             } catch (err: any) {
+              if (printWindow) printWindow.close();
               toast("Sale could not be completed", {
                 description: err?.message || "Please try again.",
               });
