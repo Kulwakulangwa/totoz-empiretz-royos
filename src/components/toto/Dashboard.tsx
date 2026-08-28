@@ -189,7 +189,7 @@ function DashboardInner() {
   const effectiveShop = selectedBranch;
   const data = branches.find((b) => b.id === effectiveShop) || branches[0];
   const visibleNav = isOwner
-    ? navItems.filter((item) => item.id !== "sales")
+    ? navItems
     : [
         { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
         { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
@@ -298,30 +298,32 @@ function DashboardInner() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-flow-col justify-stretch gap-0.5 bg-white border-t border-[#F0EEF4] p-1.5 md:hidden shadow-lg rounded-t-2xl">
-        {visibleNav.slice(0, 5).map((item) => (
+      <nav className="fixed inset-x-0 bottom-0 z-50 bg-white border-t border-[#F0EEF4] p-1.5 md:hidden shadow-lg rounded-t-2xl">
+        <div className="grid grid-cols-3 gap-1.5">
+          {visibleNav.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSection(item.id)}
+              className={cn(
+                "flex min-h-[62px] flex-col items-center justify-center rounded-xl px-1 text-[9.5px] font-medium transition-colors",
+                activeSection === item.id ? "text-white" : "text-[#8B889A]"
+              )}
+              style={{
+                background: activeSection === item.id ? colors.primary : "transparent",
+              }}
+            >
+              <span className="mb-0.5 text-base">{item.icon}</span>
+              <span className="leading-tight text-center">{item.label}</span>
+            </button>
+          ))}
           <button
-            key={item.id}
-            onClick={() => setSection(item.id)}
-            className={cn(
-              "flex flex-col items-center justify-center min-h-12 rounded-xl px-1 text-[10px] font-medium transition-colors",
-              activeSection === item.id ? "text-white" : "text-[#8B889A]"
-            )}
-            style={{
-              background: activeSection === item.id ? colors.primary : "transparent",
-            }}
+            onClick={handleSwitchBranch}
+            className="flex min-h-[62px] flex-col items-center justify-center rounded-xl px-1 text-[9.5px] font-medium text-[#5B3A96]"
           >
-            <span className="text-lg mb-0.5">{item.icon}</span>
-            <span>{item.label}</span>
+            <span className="mb-0.5 text-base">🏪</span>
+            <span className="leading-tight text-center">Switch</span>
           </button>
-        ))}
-        <button
-          onClick={handleSwitchBranch}
-          className="flex flex-col items-center justify-center min-h-12 rounded-xl px-1 text-[10px] font-medium text-[#5B3A96]"
-        >
-          <span className="text-lg mb-0.5">🏪</span>
-          <span>Switch</span>
-        </button>
+        </div>
       </nav>
     </div>
   );
