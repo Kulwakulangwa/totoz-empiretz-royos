@@ -93,16 +93,17 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
   const filteredSales = shop === "all" ? sales : sales.filter(s => s.branch === shop);
   const filteredExpenses = shop === "all" ? expenses : expenses.filter(e => e.branch === shop);
 
-  const revenue = filteredSales.reduce((sum, s) => sum + s.total, 0);
+  const grossRevenue = filteredSales.reduce((sum, s) => sum + s.total, 0);
+  const vat = filteredSales.reduce((sum, s) => sum + s.vat, 0);
+  const netRevenue = Math.max(0, grossRevenue - vat);
   const cost = filteredSales.reduce((sum, s) => sum + s.cost, 0);
   const spend = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const profit = revenue - cost - spend;
-  const vat = filteredSales.reduce((sum, s) => sum + s.vat, 0);
+  const profit = netRevenue - cost - spend;
 
   const metrics = [
     {
       label: "Sales",
-      value: money(revenue),
+      value: money(grossRevenue),
       icon: "📈",
       bg: colors.pinkBg,
       color: colors.secondary,
@@ -1729,124 +1730,191 @@ export function StaffSection({ shop }: { shop: BranchId }) {
 export function ReportsSection({ shop }: { shop: BranchId }) {
   const store = useToto();
   const scope = <T extends { branch: BranchId }>(rows: T[]) =>
-    rows.filter((r) => shop === "all" || r.branch === shop);
+    shop === "all" ? rows : rows.filter((r) => r.branch === shop);
+
   const sales = scope(store.sales);
   const expenses = scope(store.expenses);
-  const products = store.products;
   const returns = scope(store.returns);
-  const [openReport, setOpenReport] = useState<string | null>(null);
+  const products = shop === "all" ? store.products : store.products.filter((p) => Object.prototype.hasOwnProperty.call(p.stock, shop));
+  const [openReport, setOpenReport] = useState<string | null>("summary");
 
-  const revenue = sales.reduce((s, x) => s + x.total, 0);
-  const cost = sales.reduce((s, x) => s + x.cost, 0);
-  const spend = expenses.reduce((s, x) => s + x.amount, 0);
-  const cash = sales.filter((s) => s.payment === "Cash").reduce((s, x) => s + x.total, 0);
-  const lipa = revenue - cash;
-  const lowStock = products.filter((p) => stockOf(p, shop) <= p.min);
+  const grossRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const salesVat = sales.reduce((sum, sale) => sum + sale.vat, 0);
+  const netRevenue = Math.max(0, grossRevenue - salesVat);
+  const costOfGoods = sales.reduce((sum, sale) => sum + sale.cost, 0);
+  const expenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const netProfit = netRevenue - costOfGoods - expenseTotal;
+  const cashSales = sales.filter((sale) => sale.payment === "Cash").reduce((sum, sale) => sum + sale.total, 0);
+  const lipaSales = grossRevenue - cashSales;
+  const lowStock = products.filter((product) => stockOf(product, shop) <= product.min);
+  const topProducts = Object.entries(
+    sales
+      .flatMap((sale) => sale.lines)
+      .reduce<Record<string, number>>((acc, line) => {
+        acc[line.name] = (acc[line.name] ?? 0) + line.qty;
+        return acc;
+      }, {}),
+  ).sort(([, a], [, b]) => b - a)
+    .slice(0, 5)
+    .map(([name, qty]) => ({ label: name, value: `${qty} sold` }));
 
-  const summaries: Record<string, { label: string; value: string }[]> = {
-    "Sales report": [
+  const reportCards = [
+    {
+      id: "summary",
+      title: "Summary",
+      caption: shop === "all" ? "All shops" : branchLabel(shop),
+      value: money(netProfit),
+      icon: "📊",
+      color: "from-violet-600 to-pink-500",
+    },
+    {
+      id: "sales",
+      title: "Sales",
+      caption: `${sales.length} receipts`,
+      value: money(grossRevenue),
+      icon: "🧾",
+      color: "from-pink-500 to-rose-400",
+    },
+    {
+      id: "expenses",
+      title: "Expenses",
+      caption: `${expenses.length} entries`,
+      value: money(expenseTotal),
+      icon: "💰",
+      color: "from-amber-500 to-orange-400",
+    },
+    {
+      id: "vat",
+      title: "VAT",
+      caption: "Collected / due",
+      value: money(salesVat),
+      icon: "🛡️",
+      color: "from-emerald-500 to-teal-400",
+    },
+  ];
+
+  const reportDetails: Record<string, { label: string; value: string }[]> = {
+    summary: [
+      { label: "Gross revenue", value: money(grossRevenue) },
+      { label: "VAT on sales", value: money(salesVat) },
+      { label: "Net revenue", value: money(netRevenue) },
+      { label: "Cost of goods sold", value: money(costOfGoods) },
+      { label: "Expenses", value: money(expenseTotal) },
+      { label: "Net profit", value: money(netProfit) },
+    ],
+    sales: [
       { label: "Receipts", value: String(sales.length) },
-      { label: "Revenue", value: money(revenue) },
-      { label: "Gross profit", value: money(revenue - cost) },
+      { label: "Cash sales", value: money(cashSales) },
+      { label: "Lipa Namba sales", value: money(lipaSales) },
+      { label: "Average receipt", value: money(sales.length ? grossRevenue / sales.length : 0) },
+      ...topProducts.slice(0, 5).map((item) => ({ label: item.label, value: item.value })),
     ],
-    "Payment report": [
-      { label: "Cash", value: money(cash) },
-      { label: "Lipa Namba", value: money(lipa) },
-    ],
-    "Product sales": Object.entries(
-      sales
-        .flatMap((s) => s.lines)
-        .reduce<Record<string, number>>((acc, l) => {
-          acc[l.name] = (acc[l.name] ?? 0) + l.qty;
-          return acc;
-        }, {}),
-    ).map(([name, qty]) => ({ label: name, value: `${qty} sold` })),
-    "Inventory report": products.map((p) => ({
-      label: `${p.name} · ${p.sku}`,
-      value: `${stockOf(p, shop)} in stock`,
-    })),
-    "Low-stock report": lowStock.map((p) => ({
-      label: `${p.name} · ${p.sku}`,
-      value: `${stockOf(p, shop)} / min ${p.min}`,
-    })),
-    "Expense report": Object.entries(
-      expenses.reduce<Record<string, number>>((acc, e) => {
-        acc[e.category] = (acc[e.category] ?? 0) + e.amount;
+    expenses: Object.entries(
+      expenses.reduce<Record<string, number>>((acc, expense) => {
+        acc[expense.category] = (acc[expense.category] ?? 0) + expense.amount;
         return acc;
       }, {}),
     ).map(([category, amount]) => ({ label: category, value: money(amount) })),
-    "Branch performance": realBranches.map((b) => {
-      const bs = sales.filter((s) => s.branch === b.id);
-      const bRev = bs.reduce((s, x) => s + x.total, 0);
-      const bCost = bs.reduce((s, x) => s + x.cost, 0);
-      const bSpend = expenses.filter((e) => e.branch === b.id).reduce((s, e) => s + e.amount, 0);
-      return { label: b.name, value: `${money(bRev)} · profit ${money(bRev - bCost - bSpend)}` };
-    }),
-    "VAT report": [
-      { label: "Output VAT on sales", value: money(sales.reduce((a, x) => a + x.vat, 0)) },
-      { label: "VAT credited on returns", value: money(returns.reduce((a, x) => a + x.vat, 0)) },
+    vat: [
+      { label: "Output VAT", value: money(salesVat) },
+      { label: "VAT on returns", value: money(returns.reduce((sum, item) => sum + item.vat, 0)) },
       {
-        label: "Net VAT payable",
-        value: money(sales.reduce((a, x) => a + x.vat, 0) - returns.reduce((a, x) => a + x.vat, 0)),
+        label: "Net VAT",
+        value: money(Math.max(0, salesVat - returns.reduce((sum, item) => sum + item.vat, 0))),
       },
     ],
-    "Returns report": returns.map((r) => ({
-      label: `CN-${String(r.creditNote).padStart(4, "0")} · ${branchLabel(r.branch)} · ${r.reason}`,
-      value: money(r.total),
+    inventory: products.map((product) => ({
+      label: `${product.name} · ${product.sku}`,
+      value: `${stockOf(product, shop)} in stock`,
     })),
-    "Audit history": sales.map((s) => ({
-      label: `#${String(s.receipt).padStart(4, "0")} · ${branchLabel(s.branch)} · ${s.date}`,
-      value: `${s.payment} · ${money(s.total)}`,
+    stock: lowStock.map((product) => ({
+      label: `${product.name} · ${product.sku}`,
+      value: `${stockOf(product, shop)} / min ${product.min}`,
+    })),
+    returns: returns.map((item) => ({
+      label: `CN-${String(item.creditNote).padStart(4, "0")} · ${item.reason}`,
+      value: `-${money(item.total)}`,
     })),
   };
 
-  const rows = openReport ? (summaries[openReport] ?? []) : [];
+  const selectedRows = openReport ? reportDetails[openReport] ?? [] : [];
 
   return (
     <Panel>
       <PanelHead
-        title="Reports"
-        description={`Revenue ${money(revenue)} · expenses ${money(spend)} · net ${money(revenue - cost - spend)}.`}
+        title={shop === "all" ? "Brand report" : `${branchLabel(shop)} report`}
+        description={
+          shop === "all"
+            ? `Full portfolio view across all shops.`
+            : `Only ${branchLabel(shop)} records are included in this report.`
+        }
       />
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {reports.map((report) => (
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {reportCards.map((card) => (
           <button
-            key={report.title}
-            className="text-left"
-            onClick={() => setOpenReport(report.title)}
+            key={card.id}
+            type="button"
+            onClick={() => setOpenReport(card.id)}
+            className={cn(
+              "rounded-[22px] border p-4 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+              openReport === card.id
+                ? "border-violet-200 bg-gradient-to-br from-violet-50 to-pink-50"
+                : "border-[#F0EEF4] bg-white",
+            )}
           >
-            <MiniCard title={report.title} copy={report.copy} />
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                {card.title}
+              </span>
+              <span
+                className={cn(
+                  "flex size-9 items-center justify-center rounded-xl bg-gradient-to-br text-lg shadow-sm",
+                  card.color,
+                )}
+              >
+                {card.icon}
+              </span>
+            </div>
+            <div className="mt-4 text-2xl font-bold text-slate-800">{card.value}</div>
+            <div className="mt-1 text-[12px] text-slate-500">{card.caption}</div>
           </button>
         ))}
       </div>
 
-      <Dialog open={!!openReport} onOpenChange={(v) => !v && setOpenReport(null)}>
-        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{openReport}</DialogTitle>
-            <DialogDescription>
-              Generated from recorded sales, stock and expenses.
-            </DialogDescription>
-          </DialogHeader>
-          {rows.length ? (
-            <div className="grid gap-2">
-              {rows.map((r, i) => (
-                <div
-                  key={r.label + i}
-                  className="flex items-center justify-between gap-3 border-b border-border/60 py-2 text-[13px] last:border-0"
-                >
-                  <span>{r.label}</span>
-                  <span className="font-mono">{r.value}</span>
-                </div>
-              ))}
+      <div className="mt-5 rounded-[22px] border border-[#F0EEF4] bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Report details
             </div>
-          ) : (
-            <p className="py-6 text-center text-[13px] text-muted-foreground">
-              No data for this report yet.
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
+            <div className="mt-1 text-lg font-semibold text-slate-800">
+              {reportCards.find((card) => card.id === openReport)?.title ?? "Summary"}
+            </div>
+          </div>
+          <button className={btn} onClick={() => setOpenReport("summary")}>
+            Reset
+          </button>
+        </div>
+
+        {selectedRows.length ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {selectedRows.map((row, index) => (
+              <div
+                key={`${row.label}-${index}`}
+                className="flex items-center justify-between gap-3 rounded-xl border border-[#F0EEF4] bg-[#F9F8FC] px-3 py-2.5"
+              >
+                <span className="text-[12px] text-slate-600">{row.label}</span>
+                <span className="font-mono text-[12px] font-semibold text-slate-800">{row.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-xl border border-dashed border-[#E9D8FF] bg-violet-50 px-4 py-8 text-center text-[13px] text-slate-500">
+            No data available for this report yet.
+          </div>
+        )}
+      </div>
     </Panel>
   );
 }
