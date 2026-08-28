@@ -241,6 +241,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const [scanningBarcode, setScanningBarcode] = useState(false);
   const [scanningQR, setScanningQR] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const isMobileLayout = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
 
   const activeBranch: ShopId = shop === "all" ? "toto" : shop;
   const assigned = branchLabel(activeBranch);
@@ -662,8 +663,6 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               return;
             }
 
-            const printWindow = window.open("", "_blank", "width=420,height=700");
-
             try {
               const sale = await recordSale({
                 branch: activeBranch,
@@ -675,11 +674,25 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               toast(`Receipt #${String(sale.receipt).padStart(4, "0")} completed`, {
                 description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
               });
-              renderReceiptWindow(sale);
+
+              if (isMobileLayout) {
+                renderReceiptWindow(sale);
+                setCart([]);
+                focusInput();
+                return;
+              }
+
+              const printWindow = window.open("", "_blank", "width=420,height=700");
+              try {
+                renderReceiptWindow(sale);
+              } catch (error) {
+                if (printWindow) printWindow.close();
+                throw error;
+              }
+
               setCart([]);
               focusInput();
             } catch (err: any) {
-              if (printWindow) printWindow.close();
               toast("Sale could not be completed", {
                 description: err?.message || "Please try again.",
               });
