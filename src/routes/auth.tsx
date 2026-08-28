@@ -59,86 +59,57 @@ function AuthPage() {
 
   return (
     <main className="grid min-h-screen place-items-center bg-[#0b0b10] px-4 py-12">
-      <div className="w-full max-w-[980px] rounded-[28px] bg-[#f3f3f5] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.28)] sm:p-7">
-        <div className="grid gap-6 md:grid-cols-[1.05fr_0.95fr] md:items-center">
-          <div className="rounded-[20px] bg-[#f7f7f9] p-5 shadow-[inset_0_0_0_1px_rgba(29,30,38,0.05)] sm:p-8">
-            <div className="mx-auto mb-5 flex w-[80px] items-center justify-center rounded-xl border border-[#e4e3ea] bg-[#f3ecff] px-2 py-2.5">
-              <div className="grid size-10 place-items-center rounded-md bg-gradient-to-br from-[#5B3A96] to-[#E93FA0] text-sm font-bold text-white">
-                TE
-              </div>
-            </div>
-
-            <div className="text-center">
-              <div className="text-[12px] font-semibold uppercase tracking-[0.24em] text-[#7a728c]">Toto Empire</div>
-              <h1 className="mt-4 text-[34px] font-bold leading-tight text-[#23232d]">Staff sign in</h1>
-            </div>
-
-            <div className="mt-7 grid gap-5">
-              <label className="grid gap-2">
-                <span className="text-[15px] font-medium text-[#2b2b35]">Email</span>
-                <input
-                  className={field}
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Email"
-                />
-              </label>
-
-              <label className="grid gap-2">
-                <span className="text-[15px] font-medium text-[#2b2b35]">Password</span>
-                <input
-                  className={field}
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="Password"
-                />
-              </label>
-
-              <button
-                disabled={busy}
-                onClick={submit}
-                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#5B3A96] to-[#E93FA0] px-4 text-base font-semibold text-white shadow-[0_12px_24px_rgba(91,58,150,0.25)] transition-opacity hover:opacity-95 disabled:opacity-60"
-              >
-                {busy ? "Please wait…" : "Sign in"}
-              </button>
-            </div>
-
-            <p className="mt-7 text-center text-[14px] leading-relaxed text-[#6c6678]">
-              Accounts are created by the owner. Contact the owner if you need access.
-            </p>
-          </div>
-
-          <div className="rounded-[20px] bg-[#f4f1f7] p-4 shadow-[inset_0_0_0_1px_rgba(29,30,38,0.04)] sm:p-6">
-            <div className="mx-auto flex min-h-[360px] w-full max-w-[420px] items-center justify-center rounded-[20px] bg-[#f1eef3] p-5 shadow-[inset_0_0_0_1px_rgba(29,30,38,0.04)]">
-              <div className="w-full rounded-[18px] bg-white/80 p-5 shadow-sm ring-1 ring-black/5">
-                <div className="mb-5 flex items-center justify-between rounded-xl bg-[#f3f0f7] px-3 py-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7a728c]">Toto Empire</div>
-                  <span className="rounded-full bg-[#efeaff] px-2 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-[#5B3A96]">Staff</span>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-[15px] font-medium text-[#2b2b35]">Email</label>
-                    <div className="h-12 rounded-xl border border-[#e5e1eb] bg-[#faf8fc]" />
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-[15px] font-medium text-[#2b2b35]">Password</label>
-                    <div className="h-12 rounded-xl border border-[#e5e1eb] bg-[#faf8fc]" />
-                  </div>
-
-                  <button className="mt-2 flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#5B3A96] to-[#E93FA0] text-[17px] font-semibold text-white">
-                    Sign in
-                  </button>
-                </div>
-              </div>
+      <div className="w-full max-w-[780px] rounded-[28px] bg-[#f3f3f5] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.28)] sm:p-8">
+        <div className="rounded-[20px] bg-[#f7f7f9] p-5 shadow-[inset_0_0_0_1px_rgba(29,30,38,0.05)] sm:p-8">
+          <div className="mx-auto mb-5 flex w-[76px] items-center justify-center rounded-xl border border-[#e4e3ea] bg-[#f3ecff] px-2 py-2.5">
+            <div className="grid size-10 place-items-center rounded-md bg-gradient-to-br from-[#5B3A96] to-[#E93FA0] text-sm font-bold text-white">
+              TE
             </div>
           </div>
+
+          <div className="text-center">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.24em] text-[#7a728c]">Toto Empire</div>
+            <h1 className="mt-4 text-[34px] font-bold leading-tight text-[#23232d]">Staff sign in</h1>
+          </div>
+
+          <div className="mt-7 grid gap-5">
+            <label className="grid gap-2">
+              <span className="text-[15px] font-medium text-[#2b2b35]">Email</span>
+              <input
+                className={field}
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+              />
+            </label>
+
+            <label className="grid gap-2">
+              <span className="text-[15px] font-medium text-[#2b2b35]">Password</span>
+              <input
+                className={field}
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                placeholder="Password"
+              />
+            </label>
+
+            <button
+              disabled={busy}
+              onClick={submit}
+              className="inline-flex min-h-12 items-center justify-center rounded-xl bg-gradient-to-r from-[#5B3A96] to-[#E93FA0] px-4 text-base font-semibold text-white shadow-[0_12px_24px_rgba(91,58,150,0.25)] transition-opacity hover:opacity-95 disabled:opacity-60"
+            >
+              {busy ? "Please wait…" : "Sign in"}
+            </button>
+          </div>
+
+          <p className="mt-7 text-center text-[14px] leading-relaxed text-[#6c6678]">
+            Accounts are created by the owner. Contact the owner if you need access.
+          </p>
         </div>
       </div>
     </main>
