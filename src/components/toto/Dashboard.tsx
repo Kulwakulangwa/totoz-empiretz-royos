@@ -45,6 +45,7 @@ function DashboardInner() {
   const [selectedBranch, setSelectedBranch] = useState<BranchId | null>(null);
   const [showBranchSelector, setShowBranchSelector] = useState(true);
   const [section, setSection] = useState<SectionId>("overview");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const accessibleBranches = useMemo(() => {
     if (isOwner) return branches;
@@ -298,30 +299,65 @@ function DashboardInner() {
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 bg-white border-t border-[#F0EEF4] p-1.5 md:hidden shadow-lg rounded-t-2xl">
-        <div className="grid grid-cols-3 gap-1.5">
-          {visibleNav.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setSection(item.id)}
-              className={cn(
-                "flex min-h-[62px] flex-col items-center justify-center rounded-xl px-1 text-[9.5px] font-medium transition-colors",
-                activeSection === item.id ? "text-white" : "text-[#8B889A]"
-              )}
-              style={{
-                background: activeSection === item.id ? colors.primary : "transparent",
-              }}
-            >
-              <span className="mb-0.5 text-base">{item.icon}</span>
-              <span className="leading-tight text-center">{item.label}</span>
-            </button>
-          ))}
+      <nav className="fixed inset-x-0 bottom-0 z-50 md:hidden">
+        <div className="mx-3 mb-3">
+          {mobileMenuOpen && (
+            <div className="mb-2 rounded-2xl border border-[#F0EEF4] bg-white p-2 shadow-[0_-10px_30px_rgba(86,54,130,0.14)]">
+              <div className="grid grid-cols-2 gap-2">
+                {visibleNav.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setSection(item.id);
+                      setMobileMenuOpen(false);
+                    }}
+                    className={cn(
+                      "flex min-h-[58px] flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium transition-colors",
+                      activeSection === item.id ? "text-white" : "text-[#8B889A]"
+                    )}
+                    style={{
+                      background: activeSection === item.id ? colors.primary : "#F7F7FA",
+                    }}
+                  >
+                    <span className="mb-0.5 text-base">{item.icon}</span>
+                    <span className="leading-tight text-center">{item.label}</span>
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    handleSwitchBranch();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex min-h-[58px] flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium text-[#5B3A96]"
+                  style={{ background: "#F5F0FF" }}
+                >
+                  <span className="mb-0.5 text-base">🏪</span>
+                  <span className="leading-tight text-center">Switch</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <button
-            onClick={handleSwitchBranch}
-            className="flex min-h-[62px] flex-col items-center justify-center rounded-xl px-1 text-[9.5px] font-medium text-[#5B3A96]"
+            type="button"
+            onClick={() => setMobileMenuOpen((open) => !open)}
+            className="flex w-full items-center justify-between rounded-2xl border border-[#EDE7F8] bg-white px-4 py-3 shadow-lg"
+            style={{ boxShadow: "0 12px 28px rgba(88, 62, 162, 0.16)" }}
           >
-            <span className="mb-0.5 text-base">🏪</span>
-            <span className="leading-tight text-center">Switch</span>
+            <div className="flex items-center gap-2">
+              <span className="flex size-8 items-center justify-center rounded-full text-base" style={{ background: colors.primary, color: colors.white }}>
+                {visibleNav.find((item) => item.id === activeSection)?.icon || "📱"}
+              </span>
+              <div className="text-left leading-tight">
+                <p className="text-[10px] font-medium uppercase tracking-[0.12em]" style={{ color: colors.textMuted }}>
+                  Menu
+                </p>
+                <p className="text-sm font-semibold" style={{ color: colors.textDark }}>
+                  {visibleNav.find((item) => item.id === activeSection)?.label || "Open"}
+                </p>
+              </div>
+            </div>
+            <span className="text-xl" style={{ color: colors.primary }}>{mobileMenuOpen ? "⌃" : "⌄"}</span>
           </button>
         </div>
       </nav>
