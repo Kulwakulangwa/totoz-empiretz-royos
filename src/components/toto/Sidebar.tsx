@@ -27,7 +27,7 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
   const visibleNav = isOwner
-    ? navItems.filter((item) => item.id !== "sales")
+    ? navItems
     : [
         { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
         { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
@@ -94,31 +94,6 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
           );
         })}
       </nav>
-
-      {/* New Goods CTA */}
-      <div className="px-3 py-3 border-t border-[#F0EEF4]">
-        <div
-          className="rounded-xl p-4 text-center border-2 border-dashed"
-          style={{
-            background: colors.lavenderLight,
-            borderColor: colors.primary + "40",
-          }}
-        >
-          <p className="text-sm font-medium" style={{ color: colors.primary }}>
-            + New Goods
-          </p>
-          <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
-            Add products to inventory
-          </p>
-          <button
-            onClick={() => onSection("inventory")}
-            className="mt-2 mx-auto flex items-center justify-center size-8 rounded-full text-white transition-transform hover:scale-105"
-            style={{ background: colors.primary }}
-          >
-            <Plus className="size-4" />
-          </button>
-        </div>
-      </div>
 
       {/* Footer */}
       <div className="p-3 border-t border-[#F0EEF4]">
