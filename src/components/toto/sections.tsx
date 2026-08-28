@@ -920,7 +920,9 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     setSaving(true);
     let result: SaveResult;
     try {
-      result = await (editing ? updateProduct(editing, payload) : addProduct(payload));
+      result = await (editing
+        ? updateProduct(editing, payload, defaultShop)
+        : addProduct(payload, defaultShop));
     } catch (err: any) {
       toast("Product could not be saved", {
         description: err?.message || "Please try again.",

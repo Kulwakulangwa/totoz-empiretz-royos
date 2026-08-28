@@ -126,8 +126,8 @@ const EMPTY: State = {
 };
 
 type Ctx = State & {
-  addProduct: (input: ProductInput) => Promise<SaveResult>;
-  updateProduct: (sku: string, input: ProductInput) => Promise<SaveResult>;
+  addProduct: (input: ProductInput, branchOverride?: ShopId) => Promise<SaveResult>;
+  updateProduct: (sku: string, input: ProductInput, branchOverride?: ShopId) => Promise<SaveResult>;
   removeProduct: (sku: string) => Promise<void>;
   adjustStock: (sku: string, branch: ShopId, delta: number, reason: string) => Promise<void>;
   findByCode: (code: string, branch: BranchId) => Product | undefined;
@@ -429,7 +429,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     return branch === "all" || stockOf(match, branch) >= 0 ? match : undefined;
   }, [state.products]);
 
-  const addProduct = useCallback(async (input: ProductInput): Promise<SaveResult> => {
+  const addProduct = useCallback(async (input: ProductInput, branchOverride?: ShopId): Promise<SaveResult> => {
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Product name is required." };
 
@@ -448,15 +448,12 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
 
     const availableBranches = shopIds.filter((id) => Object.prototype.hasOwnProperty.call(input.stock, id));
-    const branch =
-      (staffProfile?.branch_id ? getBranchIdFromUuid(staffProfile.branch_id) : availableBranches[0]) ||
-      (Object.keys(input.stock)[0] as ShopId) ||
-      'toto';
-    const quantity = Number(input.stock[branch] ?? 0);
+    const branch = branchOverride ||
+      (availableBranches[0] ?? (staffProfile?.branch_id ? getBranchIdFromUuid(staffProfile.branch_id) : undefined) ?? "toto");
+    const quantity = Math.max(0, Number(input.stock[branch] ?? 0));
     let imagePath: string | null = null;
 
     try {
-      // Upload image first (if provided)
       if (input.imageFile) {
         imagePath = await uploadProductImage(sku, input.imageFile);
       }
@@ -472,7 +469,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           selling_price: Number(input.sell) || 0,
           min_stock: Math.max(0, Number(input.min) || 0),
           branch_id: getBranchUuid(branch),
-          quantity: quantity,
+          quantity,
           unit: 'pcs',
           is_active: true,
           image_path: imagePath,
@@ -495,25 +492,25 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         imageUrl: productImageUrl(imagePath),
       };
 
-      commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode}`));
+      commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode} · ${branchLabel(branch)}`));
       await refreshData();
       return { ok: true, product };
     } catch (err: any) {
-      // Clean up uploaded image if product insertion fails
       if (imagePath) {
         await removeProductImage(imagePath);
       }
       console.error('Error adding product:', err);
       return { ok: false, error: err.message };
     }
-  }, [commit, refreshData]);
+  }, [commit, refreshData, staffProfile]);
 
-  const updateProduct = useCallback(async (sku: string, input: ProductInput): Promise<SaveResult> => {
+  const updateProduct = useCallback(async (sku: string, input: ProductInput, branchOverride?: ShopId): Promise<SaveResult> => {
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Product name is required." };
     const oldProduct = ref.current.products.find((p) => p.sku === sku);
     let nextImagePath = oldProduct?.imagePath ?? null;
     let uploadedImagePath: string | null = null;
+    const targetBranch = branchOverride ?? (oldProduct ? Object.keys(oldProduct.stock)[0] as ShopId : "toto");
 
     try {
       if (input.imageFile) {
@@ -534,6 +531,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           selling_price: Number(input.sell) || 0,
           min_stock: Math.max(0, Number(input.min) || 0),
           image_path: nextImagePath,
+          branch_id: getBranchUuid(targetBranch),
         })
         .eq('sku', sku);
 
