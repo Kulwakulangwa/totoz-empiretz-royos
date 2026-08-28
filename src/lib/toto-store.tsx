@@ -333,7 +333,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         `);
 
       if (!isOwner && userBranch) {
-        salesQuery = salesQuery.eq('branch_id', userBranch);
+        salesQuery = salesQuery.eq('branch_id', getBranchUuid(userBranch));
       }
 
       const { data: salesData, error: salesError } = await salesQuery.order('created_at', { ascending: false });
@@ -706,14 +706,31 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         vat: vatOf(total, ref.current.settings),
       };
 
-      commit((prev) => log(
-        `Sale #${String(sale.receipt).padStart(4, "0")}`,
-        `${branchLabel(branch)} · ${cashierDisplayName} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
-      )({
-        ...prev,
-        sales: [sale, ...prev.sales],
-        receipt: prev.receipt + 1,
-      }));
+      commit((prev) => {
+        const nextProducts = prev.products.map((product) => {
+          const lineMatch = input.lines.find((line) => line.sku === product.sku);
+          if (!lineMatch) return product;
+          const currentQty = product.stock[branch] ?? 0;
+          const nextQty = Math.max(0, currentQty - lineMatch.qty);
+          return {
+            ...product,
+            stock: {
+              ...product.stock,
+              [branch]: nextQty,
+            },
+          };
+        });
+
+        return log(
+          `Sale #${String(sale.receipt).padStart(4, "0")}`,
+          `${branchLabel(branch)} · ${cashierDisplayName} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
+        )({
+          ...prev,
+          sales: [sale, ...prev.sales],
+          products: nextProducts,
+          receipt: prev.receipt + 1,
+        });
+      });
 
       await refreshData();
       return sale;
