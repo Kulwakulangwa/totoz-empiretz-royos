@@ -385,15 +385,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const total = cart.reduce((sum, i) => sum + i.sell * i.qty, 0);
   const count = cart.reduce((sum, i) => sum + i.qty, 0);
 
-  function renderReceiptWindow(
-    sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number },
-    printWindow: Window | null,
-  ) {
-    if (!printWindow) {
-      toast("Your browser blocked the receipt print popup.");
-      return;
-    }
-
+  function renderReceiptWindow(sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number }) {
     const rows = sale.lines
       .map(
         (line) => `
@@ -471,11 +463,43 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
       </html>
     `;
 
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 250);
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("title", "Receipt print");
+      iframe.style.position = "fixed";
+      iframe.style.top = "-9999px";
+      iframe.style.left = "-9999px";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      iframe.style.opacity = "0";
+      document.body.appendChild(iframe);
+
+      const frameDoc = iframe.contentWindow?.document;
+      if (!frameDoc) {
+        throw new Error("Receipt iframe could not be created.");
+      }
+
+      frameDoc.open();
+      frameDoc.write(html);
+      frameDoc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } finally {
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 500);
+        }
+      }, 250);
+    } catch (error) {
+      toast("Receipt could not be printed automatically. Please try again.");
+      console.error("Receipt print error:", error);
+    }
   }
 
   return (
@@ -651,7 +675,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               toast(`Receipt #${String(sale.receipt).padStart(4, "0")} completed`, {
                 description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
               });
-              renderReceiptWindow(sale, printWindow);
+              renderReceiptWindow(sale);
               setCart([]);
               focusInput();
             } catch (err: any) {
