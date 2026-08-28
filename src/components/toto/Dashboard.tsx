@@ -39,7 +39,7 @@ function DashboardInner() {
   const { user, role, signOut, staffProfile, loading: authLoading } = useAuth();
   const { sales, returns, expenses, products, loading: storeLoading, refreshData } = useToto();
 
-  const isOwner = role === "owner";
+  const isPrivileged = role === "owner" || role === "manager";
   const cashier = user?.user_metadata?.["full_name"] ?? user?.email ?? "Staff";
 
   const [selectedBranch, setSelectedBranch] = useState<BranchId | null>(null);
@@ -48,7 +48,7 @@ function DashboardInner() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const accessibleBranches = useMemo(() => {
-    if (isOwner) return branches;
+    if (isPrivileged) return branches;
     if (staffProfile) {
       const rawBranchId = staffProfile.branch?.id ?? staffProfile.branch_id;
       const branchId =
@@ -59,7 +59,7 @@ function DashboardInner() {
       return assignedBranch ? [assignedBranch] : [];
     }
     return [];
-  }, [isOwner, staffProfile]);
+  }, [isPrivileged, staffProfile]);
 
   // All‑shop metrics (total)
   const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
@@ -108,7 +108,7 @@ function DashboardInner() {
   useEffect(() => {
     if (authLoading) return;
 
-    if (!isOwner) {
+    if (!isPrivileged) {
       if (accessibleBranches.length === 0) {
         setSelectedBranch(null);
         setShowBranchSelector(true);
@@ -127,7 +127,7 @@ function DashboardInner() {
       setSelectedBranch(accessibleBranches[0].id);
       setShowBranchSelector(false);
     }
-  }, [authLoading, accessibleBranches, isOwner, selectedBranch, showBranchSelector]);
+  }, [authLoading, accessibleBranches, isPrivileged, selectedBranch, showBranchSelector]);
 
   if (!authLoading && accessibleBranches.length === 0) {
     return (
@@ -148,11 +148,11 @@ function DashboardInner() {
     );
   }
 
-  if (!isOwner && accessibleBranches.length > 0 && !selectedBranch) {
+  if (!isPrivileged && accessibleBranches.length > 0 && !selectedBranch) {
     return null;
   }
 
-  if (showBranchSelector && isOwner) {
+  if (showBranchSelector && isPrivileged) {
     return (
       <BranchSelectionPage
         branches={branchSummaries}
@@ -189,13 +189,13 @@ function DashboardInner() {
 
   const effectiveShop = selectedBranch;
   const data = branches.find((b) => b.id === effectiveShop) || branches[0];
-  const visibleNav = isOwner
+  const visibleNav = isPrivileged
     ? navItems
     : [
         { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
         { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
       ];
-  const activeSection: SectionId = isOwner
+  const activeSection: SectionId = isPrivileged
     ? (section as SectionId)
     : section === "sales"
       ? "sales"
@@ -264,6 +264,7 @@ function DashboardInner() {
             branchId={effectiveShop}
             userEmail={user?.email}
             role={role || undefined}
+            canSwitchBranch={isPrivileged}
             onSwitchBranch={handleSwitchBranch}
             onLogout={() => {
               signOut();
@@ -272,16 +273,16 @@ function DashboardInner() {
           />
 
           <div className="flex flex-1 overflow-hidden">
-            <Sidebar shop={effectiveShop} section={activeSection} isOwner={isOwner} onSection={setSection} />
+            <Sidebar shop={effectiveShop} section={activeSection} isOwner={isPrivileged} onSection={setSection} />
 
             <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
-              {isOwner ? (
+              {isPrivileged ? (
                 <>
                   {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
                   {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-                  {activeSection === "sales" && <SalesSection shop={effectiveShop} isOwner={isOwner} />}
+                  {activeSection === "sales" && <SalesSection shop={effectiveShop} isOwner={isPrivileged} />}
                   {activeSection === "returns" && (
-                    <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isOwner} />
+                    <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={isPrivileged} />
                   )}
                   {activeSection === "inventory" && <InventorySection shop={effectiveShop} />}
                   {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
@@ -290,7 +291,7 @@ function DashboardInner() {
                   {activeSection === "settings" && <SettingsSection />}
                 </>
               ) : activeSection === "sales" ? (
-                <SalesSection shop={effectiveShop} isOwner={isOwner} />
+                <SalesSection shop={effectiveShop} isOwner={isPrivileged} />
               ) : (
                 <PosSection shop={effectiveShop} cashier={cashier} />
               )}
@@ -323,17 +324,19 @@ function DashboardInner() {
                     <span className="leading-tight text-center">{item.label}</span>
                   </button>
                 ))}
-                <button
-                  onClick={() => {
-                    handleSwitchBranch();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="flex min-h-[58px] flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium text-[#5B3A96]"
-                  style={{ background: "#F5F0FF" }}
-                >
-                  <span className="mb-0.5 text-base">🏪</span>
-                  <span className="leading-tight text-center">Switch</span>
-                </button>
+                {isPrivileged && (
+                  <button
+                    onClick={() => {
+                      handleSwitchBranch();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex min-h-[58px] flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium text-[#5B3A96]"
+                    style={{ background: "#F5F0FF" }}
+                  >
+                    <span className="mb-0.5 text-base">🏪</span>
+                    <span className="leading-tight text-center">Switch</span>
+                  </button>
+                )}
               </div>
             </div>
           )}

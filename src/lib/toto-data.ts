@@ -55,6 +55,7 @@ export const reports = [
 ];
 
 export type Product = {
+  branch: ShopId;
   name: string;
   sku: string;
   barcode: string;
@@ -69,7 +70,7 @@ export type Product = {
 
 export type Staff = {
   name: string;
-  role: "owner" | "cashier";
+  role: "owner" | "manager" | "cashier";
   branch: BranchId;
   password?: string;
 };

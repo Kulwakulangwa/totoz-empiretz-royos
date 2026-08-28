@@ -128,7 +128,7 @@ const EMPTY: State = {
 type Ctx = State & {
   addProduct: (input: ProductInput, branchOverride?: ShopId) => Promise<SaveResult>;
   updateProduct: (sku: string, input: ProductInput, branchOverride?: ShopId) => Promise<SaveResult>;
-  removeProduct: (sku: string) => Promise<void>;
+  removeProduct: (sku: string, branchOverride?: ShopId) => Promise<void>;
   adjustStock: (sku: string, branch: ShopId, delta: number, reason: string) => Promise<void>;
   findByCode: (code: string, branch: BranchId) => Product | undefined;
   nextBarcode: () => string;
@@ -248,6 +248,9 @@ const cleanStock = (stock: Partial<Record<ShopId, number>>) => {
   return out;
 };
 
+const productBranch = (product: Product): ShopId =>
+  product.branch ?? (Object.keys(product.stock)[0] as ShopId | undefined) ?? "toto";
+
 export function TotoStoreProvider({ children }: { children: ReactNode }) {
   const { user, role, staffProfile } = useAuth();
   const [state, setState] = useState<State>(EMPTY);
@@ -281,29 +284,34 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const isOwner = role === "owner";
+      const isPrivileged = role === "owner" || role === "manager";
       const userBranch = staffProfile?.branch_id;
+      const userBranchUuid = userBranch ? getBranchUuid(userBranch) : null;
 
       let productsQuery = supabase.from('products').select('*');
-      if (!isOwner && userBranch) {
-        productsQuery = productsQuery.eq('branch_id', userBranch);
+      if (!isPrivileged && userBranchUuid) {
+        productsQuery = productsQuery.eq('branch_id', userBranchUuid);
       }
 
       const { data: productsData, error: productsError } = await productsQuery;
       if (productsError) throw productsError;
 
-      const mappedProducts: Product[] = (productsData || []).map(p => ({
-        name: p.name,
-        sku: p.sku,
-        barcode: p.barcode || '',
-        category: p.category || 'General',
-        buy: Number(p.buying_price) || 0,
-        sell: Number(p.selling_price) || 0,
-        min: Number(p.min_stock) || 5,
-        stock: { [getBranchIdFromUuid(p.branch_id)]: Number(p.quantity) || 0 } as Partial<Record<ShopId, number>>,
-        imagePath: p.image_path || null,
-        imageUrl: productImageUrl(p.image_path || null),
-      }));
+      const mappedProducts: Product[] = (productsData || []).map(p => {
+        const branch = getBranchIdFromUuid(p.branch_id);
+        return {
+          branch,
+          name: p.name,
+          sku: p.sku,
+          barcode: p.barcode || '',
+          category: p.category || 'General',
+          buy: Number(p.buying_price) || 0,
+          sell: Number(p.selling_price) || 0,
+          min: Number(p.min_stock) || 5,
+          stock: { [branch]: Number(p.quantity) || 0 } as Partial<Record<ShopId, number>>,
+          imagePath: p.image_path || null,
+          imageUrl: productImageUrl(p.image_path || null),
+        };
+      });
 
       let salesQuery = supabase
         .from('sales')
@@ -312,8 +320,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           sale_items(*)
         `);
 
-      if (!isOwner && userBranch) {
-        salesQuery = salesQuery.eq('branch_id', userBranch);
+      if (!isPrivileged && userBranchUuid) {
+        salesQuery = salesQuery.eq('branch_id', userBranchUuid);
       }
 
       const { data: salesData, error: salesError } = await salesQuery.order('created_at', { ascending: false });
@@ -344,8 +352,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       });
 
       let expensesQuery = supabase.from('expenses').select('*');
-      if (!isOwner && userBranch) {
-        expensesQuery = expensesQuery.eq('branch_id', userBranch);
+      if (!isPrivileged && userBranchUuid) {
+        expensesQuery = expensesQuery.eq('branch_id', userBranchUuid);
       }
 
       const { data: expensesData, error: expensesError } = await expensesQuery.order('expense_date', { ascending: false });
@@ -402,9 +410,11 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
   const findByCode = useCallback((code: string, branch: BranchId) => {
     const q = norm(code);
     if (!q) return undefined;
-    const match = state.products.find((p) => norm(p.barcode) === q || norm(p.sku) === q);
-    if (!match) return undefined;
-    return branch === "all" || stockOf(match, branch) >= 0 ? match : undefined;
+    return state.products.find(
+      (p) =>
+        (branch === "all" || productBranch(p) === branch) &&
+        (norm(p.barcode) === q || norm(p.sku) === q),
+    );
   }, [state.products]);
 
   // ✅ addProduct – accepts explicit branchOverride
@@ -415,9 +425,15 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Product name is required." };
 
-    const others = ref.current.products.filter((p) => p.sku !== null);
+    let branch: ShopId = branchOverride || 'toto';
+    if (!branchOverride) {
+      const keys = Object.keys(input.stock) as ShopId[];
+      if (keys.length > 0) branch = keys[0];
+    }
 
-    const sku = input.sku.trim() || nextSku(ref.current.products, name);
+    const others = ref.current.products.filter((p) => productBranch(p) === branch);
+
+    const sku = input.sku.trim() || nextSku(others, name);
     if (others.some((p) => norm(p.sku) === norm(sku))) {
       return { ok: false, error: "This SKU is already assigned to another product." };
     }
@@ -429,12 +445,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: "This barcode is already assigned to another product." };
     }
 
-    // Determine branch: use override, fallback to stock keys, or default to 'toto'
-    let branch: ShopId = branchOverride || 'toto';
-    if (!branchOverride) {
-      const keys = Object.keys(input.stock) as ShopId[];
-      if (keys.length > 0) branch = keys[0];
-    }
     const quantity = input.stock[branch] || 0;
     let imagePath: string | null = null;
 
@@ -465,6 +475,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
 
       const product: Product = {
+        branch,
         name,
         sku,
         barcode,
@@ -495,7 +506,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
   ): Promise<SaveResult> => {
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Product name is required." };
-    const oldProduct = ref.current.products.find((p) => p.sku === sku);
+    const lookupBranch = branchOverride || "toto";
+    const oldProduct = ref.current.products.find((p) => p.sku === sku && productBranch(p) === lookupBranch);
     let nextImagePath = oldProduct?.imagePath ?? null;
     let uploadedImagePath: string | null = null;
 
@@ -523,7 +535,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         image_path: nextImagePath,
       };
       if (newBranch && oldProduct) {
-        const currentBranchId = getBranchUuid(Object.keys(oldProduct.stock)[0] || 'toto');
+        const currentBranchId = getBranchUuid(productBranch(oldProduct));
         // Only update branch if it changed
         if (getBranchUuid(newBranch) !== currentBranchId) {
           updateData.branch_id = getBranchUuid(newBranch);
@@ -533,7 +545,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase
         .from('products')
         .update(updateData)
-        .eq('sku', sku);
+        .eq('sku', sku)
+        .eq('branch_id', getBranchUuid(lookupBranch));
 
       if (error) throw error;
 
@@ -543,7 +556,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
       commit(log("Product updated", `${name} · ${sku}`));
       await refreshData();
-      const product = ref.current.products.find(p => p.sku === sku);
+      const product = ref.current.products.find(p => p.sku === sku && productBranch(p) === lookupBranch);
       return { ok: true, product: product! };
     } catch (err: any) {
       if (uploadedImagePath) await removeProductImage(uploadedImagePath);
@@ -552,13 +565,15 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  const removeProduct = useCallback(async (sku: string) => {
+  const removeProduct = useCallback(async (sku: string, branchOverride?: ShopId) => {
     try {
-      const product = ref.current.products.find((p) => p.sku === sku);
+      const branch = branchOverride || "toto";
+      const product = ref.current.products.find((p) => p.sku === sku && productBranch(p) === branch);
       const { error } = await supabase
         .from('products')
         .delete()
-        .eq('sku', sku);
+        .eq('sku', sku)
+        .eq('branch_id', getBranchUuid(branch));
 
       if (error) throw error;
       await removeProductImage(product?.imagePath);
@@ -575,6 +590,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         .from('products')
         .select('quantity, branch_id')
         .eq('sku', sku)
+        .eq('branch_id', getBranchUuid(branch))
         .single();
 
       if (!product) return;
@@ -584,7 +600,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase
         .from('products')
         .update({ quantity: newQuantity })
-        .eq('sku', sku);
+        .eq('sku', sku)
+        .eq('branch_id', getBranchUuid(branch));
 
       if (error) throw error;
 
@@ -651,6 +668,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           .from('products')
           .select('quantity')
           .eq('sku', line.sku)
+          .eq('branch_id', getBranchUuid(branch))
           .single();
 
         if (productError) {
@@ -662,7 +680,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           const { error: updateError } = await supabase
             .from('products')
             .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
-            .eq('sku', line.sku);
+            .eq('sku', line.sku)
+            .eq('branch_id', getBranchUuid(branch));
 
           if (updateError) {
             console.error('Inventory update error:', updateError);
@@ -737,13 +756,15 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           .from('products')
           .select('quantity')
           .eq('sku', line.sku)
+          .eq('branch_id', getBranchUuid(branch))
           .single();
 
         if (product) {
           await supabase
             .from('products')
             .update({ quantity: (product.quantity || 0) + line.qty })
-            .eq('sku', line.sku);
+            .eq('sku', line.sku)
+            .eq('branch_id', getBranchUuid(branch));
         }
       }
     }

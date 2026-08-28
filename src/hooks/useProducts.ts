@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase, Product } from '@/lib/supabase';
-import { useAuth } from './useAuth';
+import { useAuth } from './use-auth';
+import { getBranchUuid } from '@/lib/toto-data';
 
 export function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { branchId, isOwner, isManager } = useAuth();
+  const { staffProfile, isOwner, isManager } = useAuth();
+  const branchId = staffProfile?.branch_id ? getBranchUuid(staffProfile.branch_id) : null;
+  const isPrivileged = isOwner || isManager;
 
   const fetchProducts = async () => {
     try {
@@ -15,8 +18,7 @@ export function useProducts() {
 
       let query = supabase.from('products').select('*');
 
-      // If not owner, only show products from their branch
-      if (!isOwner) {
+      if (!isPrivileged && branchId) {
         query = query.eq('branch_id', branchId);
       }
 
@@ -35,11 +37,14 @@ export function useProducts() {
   const addProduct = async (product: Omit<Product, 'id' | 'created_at' | 'updated_at'>) => {
     try {
       setError(null);
+      if (!product.branch_id && !branchId) {
+        throw new Error("No branch is assigned to this product.");
+      }
       
       // Ensure branch_id is set
       const productData = {
         ...product,
-        branch_id: product.branch_id || branchId,
+        branch_id: product.branch_id || branchId!,
       };
 
       const { data, error } = await supabase
@@ -105,14 +110,13 @@ export function useProducts() {
     try {
       setError(null);
 
-      const query = supabase
+      let query = supabase
         .from('products')
         .select('*')
         .eq('barcode', barcode);
 
-      // If not owner, scope to branch
-      if (!isOwner) {
-        query.eq('branch_id', branchId);
+      if (!isPrivileged && branchId) {
+        query = query.eq('branch_id', branchId);
       }
 
       const { data, error } = await query.single();
@@ -130,10 +134,10 @@ export function useProducts() {
   };
 
   useEffect(() => {
-    if (branchId || isOwner) {
+    if (branchId || isPrivileged) {
       fetchProducts();
     }
-  }, [branchId, isOwner]);
+  }, [branchId, isPrivileged]);
 
   return {
     products,

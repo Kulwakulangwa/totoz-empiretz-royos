@@ -35,7 +35,7 @@ export function BranchSelectionPage({
   allProfit,
   allVat,
 }: BranchSelectionPageProps) {
-  const isOwner = role === "owner";
+  const isPrivileged = role === "owner" || role === "manager";
 
   const summaryMetrics = [
     { label: "Revenue", value: money(allRevenue), icon: "📈", bg: colors.pinkBg, color: colors.secondary },
@@ -100,7 +100,7 @@ export function BranchSelectionPage({
         <div className="mt-6">
           <h2 className="text-xl font-bold" style={{ color: colors.textDark }}>Select a Shop</h2>
           <p className="text-sm mt-1" style={{ color: colors.textMuted }}>
-            {isOwner
+            {isPrivileged
               ? "Choose a shop to manage. You have access to all shops."
               : "Select your assigned shop to continue."}
           </p>
@@ -136,7 +136,7 @@ export function BranchSelectionPage({
                 profit={branch.profitToday}
                 vat={branch.vatToday}
                 onClick={() => onSelectBranch(branch.id)}
-                role={isOwner ? "Owner" : "Cashier"}
+                role={isPrivileged ? (role === "manager" ? "Manager" : "Owner") : "Cashier"}
               />
             ))}
           </div>

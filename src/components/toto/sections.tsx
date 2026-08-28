@@ -549,7 +549,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               const soldOut = stock <= 0;
               return (
                 <button
-                  key={p.sku}
+                  key={`${p.branch}:${p.sku}`}
                   onClick={() => add(p)}
                   disabled={soldOut}
                   className={cn(
@@ -768,6 +768,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const { products, addProduct, updateProduct, removeProduct, adjustStock } = useToto();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [editingBranch, setEditingBranch] = useState<ShopId | null>(null);
   const [form, setForm] = useState(emptyProduct);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -821,6 +822,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     setOpen(false);
     setSaving(false);
     setEditing(null);
+    setEditingBranch(null);
     setForm({ ...emptyProduct, stock: {} });
     setPreview(null);
     pickingImageRef.current = false;
@@ -829,6 +831,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
 
   function openNew() {
     setEditing(null);
+    setEditingBranch(null);
     setForm({ ...emptyProduct, stock: {} });
     setPreview(null);
     setOpen(true);
@@ -836,8 +839,9 @@ export function InventorySection({ shop }: { shop: BranchId }) {
 
   function openEdit(p: Product) {
     setEditing(p.sku);
+    setEditingBranch(p.branch);
     const stock: Partial<Record<ShopId, string>> = {};
-    const targetShop = shop === "all" ? defaultShop : shop;
+    const targetShop = p.branch;
     if (p.stock[targetShop] !== undefined) {
       stock[targetShop] = String(p.stock[targetShop]);
     }
@@ -896,9 +900,10 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     }
 
     const stock: Partial<Record<ShopId, number>> = {};
-    const quantity = Number(form.stock[defaultShop]) || 0;
+    const targetShop = editingBranch || defaultShop;
+    const quantity = Number(form.stock[targetShop]) || 0;
     if (quantity > 0 || shop !== "all") {
-      stock[defaultShop] = quantity;
+      stock[targetShop] = quantity;
     }
 
     const payload = {
@@ -918,8 +923,8 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     let result: SaveResult;
     try {
       result = await (editing
-        ? updateProduct(editing, payload, defaultShop)
-        : addProduct(payload, defaultShop)
+        ? updateProduct(editing, payload, targetShop)
+        : addProduct(payload, targetShop)
       );
     } catch (err: any) {
       toast("Product could not be saved", {
@@ -956,7 +961,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
             }
             setAdjust({
               sku: rows[0]?.sku ?? products[0]!.sku,
-              branch: defaultShop,
+              branch: rows[0]?.branch ?? defaultShop,
               delta: "",
               reason: "",
             });
@@ -998,7 +1003,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                 const qty = stockOf(p, shop);
                 const low = qty <= p.min;
                 return (
-                  <tr key={p.sku} className="border-b border-border/50 last:border-0">
+                  <tr key={`${p.branch}:${p.sku}`} className="border-b border-border/50 last:border-0">
                     <td className="px-2.5 py-3">
                       <div className="flex items-center gap-3">
                         <ProductThumb src={p.imageUrl} alt={p.name} />
@@ -1038,7 +1043,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                         <button
                           className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
                           onClick={() => {
-                            removeProduct(p.sku);
+                            removeProduct(p.sku, p.branch);
                             toast("Product removed", { description: p.name });
                           }}
                         >
@@ -1211,13 +1216,13 @@ export function InventorySection({ shop }: { shop: BranchId }) {
           </div>
           <div className="mt-1 grid gap-3">
             <span className="text-[12px] font-medium text-muted-foreground">Stock</span>
-            <Field label={`Stock in ${branchLabel(defaultShop)}`}>
+            <Field label={`Stock in ${branchLabel(editingBranch || defaultShop)}`}>
               <input
                 className={field}
                 inputMode="numeric"
-                value={form.stock[defaultShop] ?? ""}
+                value={form.stock[editingBranch || defaultShop] ?? ""}
                 onChange={(e) =>
-                  setForm({ ...form, stock: { ...form.stock, [defaultShop]: e.target.value } })
+                  setForm({ ...form, stock: { ...form.stock, [editingBranch || defaultShop]: e.target.value } })
                 }
               />
             </Field>
@@ -1262,12 +1267,15 @@ export function InventorySection({ shop }: { shop: BranchId }) {
               <Field label="Product">
                 <select
                   className={field}
-                  value={adjust.sku}
-                  onChange={(e) => setAdjust({ ...adjust, sku: e.target.value })}
+                  value={`${adjust.branch}:${adjust.sku}`}
+                  onChange={(e) => {
+                    const [branch, sku] = e.target.value.split(":");
+                    setAdjust({ ...adjust, branch: branch as ShopId, sku: sku || "" });
+                  }}
                 >
-                  {products.map((p) => (
-                    <option key={p.sku} value={p.sku}>
-                      {p.name} · {p.sku}
+                  {rows.map((p) => (
+                    <option key={`${p.branch}:${p.sku}`} value={`${p.branch}:${p.sku}`}>
+                      {p.name} · {p.sku} · {branchLabel(p.branch)}
                     </option>
                   ))}
                 </select>
@@ -1281,7 +1289,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                   {shopIds.map((id) => (
                     <option key={id} value={id}>
                       {branchLabel(id)} (
-                      {products.find((p) => p.sku === adjust.sku)?.stock[id] ?? 0})
+                      {products.find((p) => p.sku === adjust.sku && p.branch === id)?.stock[id] ?? 0})
                     </option>
                   ))}
                 </select>
@@ -1527,13 +1535,14 @@ export function StaffSection({ shop }: { shop: BranchId }) {
   const deleteStaffFn = useServerFn(deleteStaffAccount);
   const { role } = useAuth();
   const isOwner = role === "owner";
+  const isManager = role === "manager";
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
     password: "",
-    role: "cashier" as "owner" | "cashier",
+    role: "cashier" as "owner" | "manager" | "cashier",
   });
 
   const currentBranchName = branchLabel(shop);
@@ -1611,7 +1620,7 @@ export function StaffSection({ shop }: { shop: BranchId }) {
         <p className="text-[13px] text-muted-foreground">Loading accounts…</p>
       ) : error ? (
         <p className="text-[13px] text-destructive">
-          Could not load accounts. Only the owner can manage staff.
+          Could not load accounts. Only owners and managers can manage staff.
         </p>
       ) : people.length ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1622,15 +1631,17 @@ export function StaffSection({ shop }: { shop: BranchId }) {
               copy={person.email}
               top={
                 <div className="flex items-center gap-2">
-                  <Pill tone={person.role === "owner" ? "ok" : "neutral"}>
-                    {person.role === "owner" ? "Owner" : "Cashier"}
+                  <Pill tone={person.role === "owner" ? "ok" : person.role === "manager" ? "warn" : "neutral"}>
+                    {person.role === "owner" ? "Owner" : person.role === "manager" ? "Manager" : "Cashier"}
                   </Pill>
-                  <button
-                    className="text-[12px] text-muted-foreground hover:text-destructive"
-                    onClick={() => remove(person)}
-                  >
-                    Remove
-                  </button>
+                  {(isOwner || (isManager && person.role === "cashier")) && (
+                    <button
+                      className="text-[12px] text-muted-foreground hover:text-destructive"
+                      onClick={() => remove(person)}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               }
             />
@@ -1683,10 +1694,11 @@ export function StaffSection({ shop }: { shop: BranchId }) {
               <select
                 className={field}
                 value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value as "owner" | "cashier" })}
+                onChange={(e) => setForm({ ...form, role: e.target.value as "owner" | "manager" | "cashier" })}
               >
                 <option value="cashier">Cashier</option>
-                <option value="owner">Owner</option>
+                {isOwner && <option value="manager">Manager</option>}
+                {isOwner && <option value="owner">Owner</option>}
               </select>
             </Field>
             <div>
@@ -1873,7 +1885,7 @@ export function ReturnsSection({
     setRestock(true);
   }
 
-  function submit() {
+  async function submit() {
     if (!sale) return;
     const lines = sale.lines
       .map((l) => ({ ...l, qty: Math.min(qty[l.sku] ?? 0, l.qty) }))
@@ -1882,7 +1894,7 @@ export function ReturnsSection({
       toast("Select at least one item to return.");
       return;
     }
-    const entry = recordReturn({ saleId: sale.id, cashier, reason, restock, lines });
+    const entry = await recordReturn({ saleId: sale.id, cashier, reason, restock, lines });
     if (!entry) {
       toast("Could not record this return.");
       return;

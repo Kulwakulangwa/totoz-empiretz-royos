@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { colors } from "@/lib/toto-data";
 import { Mail, ArrowRight, Loader2 } from "lucide-react";
 

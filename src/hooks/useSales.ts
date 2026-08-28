@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { supabase, Sale, SaleItem } from '@/lib/supabase';
-import { useAuth } from './useAuth';
+import { useAuth } from './use-auth';
+import { getBranchUuid } from '@/lib/toto-data';
 
 export function useSales() {
   const [sales, setSales] = useState<(Sale & { items?: SaleItem[] })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { branchId, staff, isOwner } = useAuth();
+  const { staffProfile, isOwner, isManager } = useAuth();
+  const branchId = staffProfile?.branch_id ? getBranchUuid(staffProfile.branch_id) : null;
+  const isPrivileged = isOwner || isManager;
 
   const fetchSales = async () => {
     try {
@@ -20,7 +23,7 @@ export function useSales() {
           cashier:staff(full_name)
         `);
 
-      if (!isOwner) {
+      if (!isPrivileged && branchId) {
         query = query.eq('branch_id', branchId);
       }
 
@@ -46,6 +49,9 @@ export function useSales() {
   }) => {
     try {
       setError(null);
+      if (!branchId) {
+        throw new Error("No branch is assigned to this user.");
+      }
 
       // Calculate totals
       const subtotal = saleData.items.reduce((sum, item) => sum + item.total_price, 0);
@@ -65,7 +71,7 @@ export function useSales() {
         .insert([{
           receipt_number: receiptNumber,
           branch_id: branchId,
-          cashier_id: staff?.id || null,
+          cashier_id: staffProfile?.id || null,
           customer_name: saleData.customer_name || null,
           customer_phone: saleData.customer_phone || null,
           subtotal,
@@ -112,7 +118,7 @@ export function useSales() {
         .from('activity_logs')
         .insert([{
           branch_id: branchId,
-          user_id: staff?.id || null,
+          user_id: staffProfile?.id || null,
           action: 'sale_created',
           details: {
             receipt_number: receiptNumber,
@@ -136,15 +142,20 @@ export function useSales() {
     try {
       setError(null);
 
-      const { data: sale, error: saleError } = await supabase
+      let query = supabase
         .from('sales')
         .select(`
           *,
           cashier:staff(full_name),
           items:sale_items(*)
         `)
-        .eq('receipt_number', receiptNumber)
-        .single();
+        .eq('receipt_number', receiptNumber);
+
+      if (!isPrivileged && branchId) {
+        query = query.eq('branch_id', branchId);
+      }
+
+      const { data: sale, error: saleError } = await query.single();
 
       if (saleError) throw saleError;
       return { data: sale, error: null };
@@ -155,10 +166,10 @@ export function useSales() {
   };
 
   useEffect(() => {
-    if (branchId || isOwner) {
+    if (branchId || isPrivileged) {
       fetchSales();
     }
-  }, [branchId, isOwner]);
+  }, [branchId, isPrivileged]);
 
   return {
     sales,

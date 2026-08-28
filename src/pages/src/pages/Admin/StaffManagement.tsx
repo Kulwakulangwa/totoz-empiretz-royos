@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createStaffAccount } from "@/lib/admin";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
 export function StaffManagement() {

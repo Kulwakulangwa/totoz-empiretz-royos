@@ -8,6 +8,7 @@ interface BranchDashboardHeaderProps {
   role?: string;
   onSwitchBranch: () => void;
   onLogout: () => void;
+  canSwitchBranch?: boolean;
 }
 
 export function BranchDashboardHeader({
@@ -17,6 +18,7 @@ export function BranchDashboardHeader({
   role,
   onSwitchBranch,
   onLogout,
+  canSwitchBranch = true,
 }: BranchDashboardHeaderProps) {
   const isTotozEmpireBrand = branchId === "toto" || branchName.toLowerCase().includes("totoz");
 
@@ -24,15 +26,19 @@ export function BranchDashboardHeader({
     <div className="border-b border-[#F0EEF4] bg-white px-4 py-3 flex-shrink-0">
       <div className="max-w-full flex flex-wrap items-center justify-between gap-3">
         {/* Left: Switch Branch */}
-        <button
-          onClick={onSwitchBranch}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-colors hover:bg-[#F7F7FA]"
-          style={{ color: colors.textMuted }}
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span className="hidden sm:inline">Switch Branch</span>
-          <span className="sm:hidden">Switch</span>
-        </button>
+        {canSwitchBranch ? (
+          <button
+            onClick={onSwitchBranch}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-colors hover:bg-[#F7F7FA]"
+            style={{ color: colors.textMuted }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Switch Branch</span>
+            <span className="sm:hidden">Switch</span>
+          </button>
+        ) : (
+          <div className="w-4" />
+        )}
 
         {/* Center: Branch Info + Search */}
         <div className="flex items-center gap-4 flex-1 max-w-md">

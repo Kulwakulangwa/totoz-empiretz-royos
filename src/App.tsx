@@ -6,7 +6,7 @@ import { Inventory } from "@/pages/Inventory";
 import { StaffManagement } from "@/pages/Admin/StaffManagement";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/use-auth";
 
 // Wrapper component to handle role-based redirects
 function AppContent() {
@@ -59,7 +59,7 @@ function AppContent() {
       <Route
         path="/staff"
         element={
-          <ProtectedRoute requiredRole="owner">
+          <ProtectedRoute requiredRole={["owner", "manager"]}>
             <StaffManagement />
           </ProtectedRoute>
         }

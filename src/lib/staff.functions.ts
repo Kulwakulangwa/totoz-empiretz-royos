@@ -8,27 +8,37 @@ export type StaffAccount = {
   email: string;
   fullName: string;
   branch: string;
-  role: "owner" | "cashier";
+  role: "owner" | "manager" | "cashier";
   createdAt: string;
   isActive: boolean;
 };
 
-async function assertOwner(context: any) {
+async function getActorRole(context: any): Promise<"owner" | "manager" | "cashier"> {
   const { supabase, userId } = context;
   const { data, error } = await supabase
     .from("staff")
     .select("role")
     .eq("user_id", userId)
     .single();
-  if (error || !data || data.role !== "owner") {
-    throw new Response("Forbidden – owner access required", { status: 403 });
+  if (error || !data) {
+    throw new Response("Forbidden - staff access required", { status: 403 });
   }
+
+  return data.role as "owner" | "manager" | "cashier";
+}
+
+async function assertStaffAdmin(context: any) {
+  const role = await getActorRole(context);
+  if (role !== "owner" && role !== "manager") {
+    throw new Response("Forbidden - owner or manager access required", { status: 403 });
+  }
+  return role;
 }
 
 export const listStaff = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<StaffAccount[]> => {
-    await assertOwner(context);
+    await assertStaffAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: staff, error: staffError } = await supabaseAdmin
@@ -56,12 +66,16 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         password: z.string().min(6).max(72),
         fullName: z.string().trim().min(1).max(80),
         branch: z.string(),
-        role: z.enum(["owner", "cashier"]),
+        role: z.enum(["owner", "manager", "cashier"]),
       })
       .parse(data),
   )
   .handler(async ({ context, data }) => {
-    await assertOwner(context);
+    const actorRole = await assertStaffAdmin(context);
+    if (actorRole === "manager" && data.role !== "cashier") {
+      throw new Response("Forbidden - managers can only create cashier accounts", { status: 403 });
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const email = data.email.toLowerCase().trim();
@@ -199,12 +213,12 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ context, data }) => {
-    await assertOwner(context);
+    const actorRole = await assertStaffAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: staff, error: staffFindError } = await supabaseAdmin
       .from("staff")
-      .select("user_id")
+      .select("user_id, role")
       .eq("id", data.id)
       .single();
     if (staffFindError || !staff) {
@@ -213,6 +227,10 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
 
     if (staff.user_id === context.userId) {
       throw new Error("You cannot remove your own account");
+    }
+
+    if (actorRole === "manager" && staff.role !== "cashier") {
+      throw new Response("Forbidden - managers can only remove cashier accounts", { status: 403 });
     }
 
     const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(staff.user_id);
