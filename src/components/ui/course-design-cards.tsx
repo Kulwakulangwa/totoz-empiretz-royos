@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface CourseDesignCardMetric {
@@ -38,8 +37,23 @@ export function CourseDesignCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md border border-[#DDE3EA] bg-white/70 text-[#4B5563]">
-            <Store className="h-4 w-4" />
+          <div
+            className="relative flex h-9 w-9 items-center justify-center rounded-full"
+            style={{
+              background: "linear-gradient(135deg, #f72585 0%, #ff8a00 20%, #ffbe0b 35%, #ff5d8f 52%, #7b2cbf 75%, #5b3a96 100%)",
+            }}
+          >
+            <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 bg-white" style={{ borderColor: "#EDE7F8" }}>
+              <div className="flex flex-col items-center justify-center leading-none">
+                <div className="flex items-center justify-center gap-1">
+                  <span className="block h-1.5 w-1.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(18deg)" }} />
+                  <span className="block h-1.5 w-1.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(-18deg)" }} />
+                </div>
+                <div className="mt-0.5 flex items-center justify-center rounded-full border border-[#5B3A96] bg-[#F6D9EA] px-1 py-0.5">
+                  <span className="text-[6px] font-black tracking-[-0.16em] text-[#5B3A96]">T</span>
+                </div>
+              </div>
+            </div>
           </div>
           <h3 className="text-[1.1rem] font-semibold tracking-[-0.02em] text-[#1F2937]">{title}</h3>
         </div>
