@@ -18,6 +18,8 @@ export function BranchDashboardHeader({
   onSwitchBranch,
   onLogout,
 }: BranchDashboardHeaderProps) {
+  const isTotozEmpireBrand = branchId === "toto" || branchName.toLowerCase().includes("totoz");
+
   return (
     <div className="border-b border-[#F0EEF4] bg-white px-4 py-3 flex-shrink-0">
       <div className="max-w-full flex flex-wrap items-center justify-between gap-3">
@@ -35,12 +37,34 @@ export function BranchDashboardHeader({
         {/* Center: Branch Info + Search */}
         <div className="flex items-center gap-4 flex-1 max-w-md">
           <div className="flex items-center gap-2">
-            <div
-              className="size-9 rounded-xl flex items-center justify-center"
-              style={{ background: colors.primary + "10" }}
-            >
-              <Store className="w-4 h-4" style={{ color: colors.primary }} />
-            </div>
+            {isTotozEmpireBrand ? (
+              <div
+                className="relative flex size-12 items-center justify-center rounded-full"
+                style={{
+                  background: "linear-gradient(135deg, #f72585 0%, #ff8a00 20%, #ffbe0b 35%, #ff5d8f 52%, #7b2cbf 75%, #5b3a96 100%)",
+                  boxShadow: "0 0 0 2px rgba(91,58,150,0.08)",
+                }}
+              >
+                <div className="flex size-10 items-center justify-center rounded-full border-2 bg-white" style={{ borderColor: "#EDE7F8" }}>
+                  <div className="flex flex-col items-center justify-center leading-none">
+                    <div className="flex items-center justify-center gap-1">
+                      <span className="block h-2.5 w-2.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(18deg)" }} />
+                      <span className="block h-2.5 w-2.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(-18deg)" }} />
+                    </div>
+                    <div className="mt-0.5 flex items-center justify-center rounded-full border border-[#5B3A96] bg-[#F6D9EA] px-1.5 py-0.5">
+                      <span className="text-[7px] font-black tracking-[-0.14em] text-[#5B3A96]">T</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="size-9 rounded-xl flex items-center justify-center"
+                style={{ background: colors.primary + "10" }}
+              >
+                <Store className="w-4 h-4" style={{ color: colors.primary }} />
+              </div>
+            )}
             <div>
               <h1 className="text-sm font-semibold" style={{ color: colors.textDark }}>
                 {branchName}

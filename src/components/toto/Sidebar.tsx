@@ -26,6 +26,7 @@ type Props = {
 export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   const { signOut, user, role } = useAuth();
   const navigate = useNavigate();
+  const isTotozEmpireBrand = shop === "toto" || "totoz" === String(shop).toLowerCase();
   const visibleNav = isOwner
     ? navItems
     : [
@@ -40,20 +41,51 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
       {/* Logo */}
       <div className="p-5 border-b border-[#F0EEF4]">
         <div className="flex items-center gap-3">
-          <div
-            className="size-10 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-            style={{
-              background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
-            }}
-          >
-            TE
-          </div>
+          {isTotozEmpireBrand ? (
+            <div
+              className="relative flex size-12 items-center justify-center rounded-full flex-shrink-0"
+              style={{
+                background: "linear-gradient(135deg, #f72585 0%, #ff8a00 20%, #ffbe0b 35%, #ff5d8f 52%, #7b2cbf 75%, #5b3a96 100%)",
+                boxShadow: "0 0 0 2px rgba(91,58,150,0.08)",
+              }}
+            >
+              <div
+                className="flex size-10 items-center justify-center rounded-full border-2 bg-white"
+                style={{ borderColor: "#EDE7F8" }}
+              >
+                <div className="flex flex-col items-center justify-center leading-none">
+                  <div className="flex items-center justify-center gap-1">
+                    <span
+                      className="block h-2.5 w-2.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]"
+                      style={{ transform: "rotate(18deg)" }}
+                    />
+                    <span
+                      className="block h-2.5 w-2.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]"
+                      style={{ transform: "rotate(-18deg)" }}
+                    />
+                  </div>
+                  <div className="mt-0.5 flex items-center justify-center rounded-full border border-[#5B3A96] bg-[#F6D9EA] px-1.5 py-0.5">
+                    <span className="text-[7px] font-black tracking-[-0.14em] text-[#5B3A96]">T</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="size-10 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+              style={{
+                background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
+              }}
+            >
+              TE
+            </div>
+          )}
           <div>
             <h1 className="text-lg font-bold leading-tight" style={{ color: colors.textDark }}>
-              Toto Empire
+              {isTotozEmpireBrand ? "Totoz Empire" : "Toto Empire"}
             </h1>
             <p className="text-xs" style={{ color: colors.textMuted }}>
-              Retail Management
+              {isTotozEmpireBrand ? "Shop brand" : "Retail Management"}
             </p>
           </div>
         </div>
