@@ -162,15 +162,6 @@ const StoreContext = createContext<Ctx | null>(null);
 const today = () => new Date().toISOString().slice(0, 10);
 const timeLabel = () =>
   new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-const createReceiptNumber = () => {
-  const stamp = Date.now().toString().slice(-8);
-  const suffix = Math.random().toString(36).slice(2, 8).toUpperCase();
-  return `REC-${stamp}-${suffix}`;
-};
-const parseReceiptNumber = (receiptNumber?: string | null) => {
-  const digits = (receiptNumber || "").replace(/\D/g, "");
-  return digits ? Number(digits.slice(-8)) : 1;
-};
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
 const PRODUCT_IMAGE_BUCKET = "product-images";
 
@@ -257,7 +248,6 @@ const cleanStock = (stock: Partial<Record<ShopId, number>>) => {
   return out;
 };
 
-// ✅ TotoStoreProvider - MUST BE EXPORTED
 export function TotoStoreProvider({ children }: { children: ReactNode }) {
   const { user, role, staffProfile } = useAuth();
   const [state, setState] = useState<State>(EMPTY);
@@ -294,19 +284,9 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const isOwner = role === "owner";
       const userBranch = staffProfile?.branch_id;
 
-      const { data: staffRows, error: staffError } = await supabase
-        .from('staff')
-        .select('id, full_name, email')
-        .eq('is_active', true);
-      if (staffError) throw staffError;
-
-      const cashierNameMap = Object.fromEntries(
-        (staffRows || []).map((person: any) => [person.id, person.full_name || person.email || 'Unknown'])
-      );
-
       let productsQuery = supabase.from('products').select('*');
       if (!isOwner && userBranch) {
-        productsQuery = productsQuery.eq('branch_id', getBranchUuid(userBranch));
+        productsQuery = productsQuery.eq('branch_id', userBranch);
       }
 
       const { data: productsData, error: productsError } = await productsQuery;
@@ -333,7 +313,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         `);
 
       if (!isOwner && userBranch) {
-        salesQuery = salesQuery.eq('branch_id', getBranchUuid(userBranch));
+        salesQuery = salesQuery.eq('branch_id', userBranch);
       }
 
       const { data: salesData, error: salesError } = await salesQuery.order('created_at', { ascending: false });
@@ -349,14 +329,12 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           buy: Number(item.unit_price) * 0.7 || 0,
         }));
 
-        const cashierName = cashierNameMap[s.cashier_id as string] || s.cashier_id || 'Unknown';
-
         return {
           id: s.id,
-          receipt: parseReceiptNumber(s.receipt_number),
+          receipt: parseInt(s.receipt_number?.replace('REC-', '') || '1'),
           date: s.created_at?.split('T')[0] || today(),
           branch: getBranchIdFromUuid(s.branch_id),
-          cashier: cashierName,
+          cashier: s.cashier_id || 'Unknown',
           payment: (s.payment_method as "Cash" | "Lipa Namba") || 'Cash',
           lines,
           total: Number(s.total) || 0,
@@ -429,7 +407,11 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     return branch === "all" || stockOf(match, branch) >= 0 ? match : undefined;
   }, [state.products]);
 
-  const addProduct = useCallback(async (input: ProductInput, branchOverride?: ShopId): Promise<SaveResult> => {
+  // ✅ addProduct – accepts explicit branchOverride
+  const addProduct = useCallback(async (
+    input: ProductInput,
+    branchOverride?: ShopId
+  ): Promise<SaveResult> => {
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Product name is required." };
 
@@ -447,10 +429,13 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: "This barcode is already assigned to another product." };
     }
 
-    const availableBranches = shopIds.filter((id) => Object.prototype.hasOwnProperty.call(input.stock, id));
-    const branch = branchOverride ||
-      (availableBranches[0] ?? (staffProfile?.branch_id ? getBranchIdFromUuid(staffProfile.branch_id) : undefined) ?? "toto");
-    const quantity = Math.max(0, Number(input.stock[branch] ?? 0));
+    // Determine branch: use override, fallback to stock keys, or default to 'toto'
+    let branch: ShopId = branchOverride || 'toto';
+    if (!branchOverride) {
+      const keys = Object.keys(input.stock) as ShopId[];
+      if (keys.length > 0) branch = keys[0];
+    }
+    const quantity = input.stock[branch] || 0;
     let imagePath: string | null = null;
 
     try {
@@ -469,7 +454,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           selling_price: Number(input.sell) || 0,
           min_stock: Math.max(0, Number(input.min) || 0),
           branch_id: getBranchUuid(branch),
-          quantity,
+          quantity: quantity,
           unit: 'pcs',
           is_active: true,
           image_path: imagePath,
@@ -492,52 +477,66 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         imageUrl: productImageUrl(imagePath),
       };
 
-      commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode} · ${branchLabel(branch)}`));
+      commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode}`));
       await refreshData();
       return { ok: true, product };
     } catch (err: any) {
-      if (imagePath) {
-        await removeProductImage(imagePath);
-      }
+      if (imagePath) await removeProductImage(imagePath);
       console.error('Error adding product:', err);
       return { ok: false, error: err.message };
     }
-  }, [commit, refreshData, staffProfile]);
+  }, [commit, refreshData]);
 
-  const updateProduct = useCallback(async (sku: string, input: ProductInput, branchOverride?: ShopId): Promise<SaveResult> => {
+  // ✅ updateProduct – accepts explicit branchOverride (for branch update if needed)
+  const updateProduct = useCallback(async (
+    sku: string,
+    input: ProductInput,
+    branchOverride?: ShopId
+  ): Promise<SaveResult> => {
     const name = input.name.trim();
     if (!name) return { ok: false, error: "Product name is required." };
     const oldProduct = ref.current.products.find((p) => p.sku === sku);
     let nextImagePath = oldProduct?.imagePath ?? null;
     let uploadedImagePath: string | null = null;
-    const targetBranch = branchOverride ?? (oldProduct ? Object.keys(oldProduct.stock)[0] as ShopId : "toto");
+
+    // Determine branch if we need to update it (optional)
+    let newBranch = branchOverride;
+    if (!newBranch) {
+      const keys = Object.keys(input.stock) as ShopId[];
+      if (keys.length > 0) newBranch = keys[0];
+    }
 
     try {
       if (input.imageFile) {
-        // Upload new image
         uploadedImagePath = await uploadProductImage(sku, input.imageFile);
         nextImagePath = uploadedImagePath;
       } else if (input.removeImage) {
         nextImagePath = null;
       }
 
-      // Update product in database
+      const updateData: any = {
+        name,
+        category: input.category.trim() || 'General',
+        buying_price: Number(input.buy) || 0,
+        selling_price: Number(input.sell) || 0,
+        min_stock: Math.max(0, Number(input.min) || 0),
+        image_path: nextImagePath,
+      };
+      if (newBranch && oldProduct) {
+        const currentBranchId = getBranchUuid(Object.keys(oldProduct.stock)[0] || 'toto');
+        // Only update branch if it changed
+        if (getBranchUuid(newBranch) !== currentBranchId) {
+          updateData.branch_id = getBranchUuid(newBranch);
+        }
+      }
+
       const { error } = await supabase
         .from('products')
-        .update({
-          name,
-          category: input.category.trim() || 'General',
-          buying_price: Number(input.buy) || 0,
-          selling_price: Number(input.sell) || 0,
-          min_stock: Math.max(0, Number(input.min) || 0),
-          image_path: nextImagePath,
-          branch_id: getBranchUuid(targetBranch),
-        })
+        .update(updateData)
         .eq('sku', sku);
 
       if (error) throw error;
 
-      // Remove old image if replaced or removed
       if ((input.imageFile || input.removeImage) && oldProduct?.imagePath && oldProduct.imagePath !== nextImagePath) {
         await removeProductImage(oldProduct.imagePath);
       }
@@ -547,10 +546,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const product = ref.current.products.find(p => p.sku === sku);
       return { ok: true, product: product! };
     } catch (err: any) {
-      // Clean up newly uploaded image if update fails
-      if (uploadedImagePath) {
-        await removeProductImage(uploadedImagePath);
-      }
+      if (uploadedImagePath) await removeProductImage(uploadedImagePath);
       console.error('Error updating product:', err);
       return { ok: false, error: err.message };
     }
@@ -565,7 +561,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         .eq('sku', sku);
 
       if (error) throw error;
-      // Remove image from storage
       await removeProductImage(product?.imagePath);
       commit(log("Product removed", `${sku} deleted from inventory`));
       await refreshData();
@@ -600,7 +595,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  // recordSale (fixed payment method)
+  // recordSale (unchanged, but fixed)
   const recordSale = useCallback(async (input: {
     branch: BranchId;
     cashier: string;
@@ -610,19 +605,15 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const total = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
     const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
     const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
-    const receiptNumber = createReceiptNumber();
-    const receiptDisplay = parseReceiptNumber(receiptNumber);
+    const receiptNumber = ref.current.receipt;
     const cashierId = staffProfile?.id || user?.id || null;
-    const cashierDisplayName = staffProfile?.full_name || user?.user_metadata?.full_name || input.cashier || 'Unknown';
-
-    // Convert payment method to lowercase for database
     const paymentMethod = input.payment.toLowerCase() as "cash" | "lipa_namba";
 
     try {
       const { data: saleData, error: saleError } = await supabase
         .from('sales')
         .insert({
-          receipt_number: receiptNumber,
+          receipt_number: `REC-${receiptNumber}`,
           branch_id: getBranchUuid(branch),
           cashier_id: cashierId,
           payment_method: paymentMethod,
@@ -639,7 +630,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         throw saleError;
       }
 
-      // Insert sale items and update inventory
       for (const line of input.lines) {
         const { error: itemError } = await supabase
           .from('sale_items')
@@ -657,46 +647,35 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           throw itemError;
         }
 
-        // Update inventory
         const { data: product, error: productError } = await supabase
           .from('products')
-          .select('quantity, branch_id')
+          .select('quantity')
           .eq('sku', line.sku)
-          .eq('branch_id', getBranchUuid(branch))
-          .maybeSingle();
+          .single();
 
         if (productError) {
-          console.error('Product stock lookup error:', line.sku, productError);
+          console.error('Product not found:', line.sku, productError);
           continue;
         }
 
-        if (!product) {
-          console.error('Product not found for branch:', { sku: line.sku, branch });
-          continue;
-        }
+        if (product) {
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
+            .eq('sku', line.sku);
 
-        if ((product.quantity || 0) < line.qty) {
-          throw new Error(`Not enough stock for ${line.name} in ${branchLabel(branch)}.`);
-        }
-
-        const { error: updateError } = await supabase
-          .from('products')
-          .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
-          .eq('sku', line.sku)
-          .eq('branch_id', getBranchUuid(branch));
-
-        if (updateError) {
-          console.error('Inventory update error:', updateError);
-          throw updateError;
+          if (updateError) {
+            console.error('Inventory update error:', updateError);
+          }
         }
       }
 
       const sale: Sale = {
         id: saleData.id,
-        receipt: receiptDisplay,
+        receipt: receiptNumber,
         date: today(),
         branch,
-        cashier: cashierDisplayName,
+        cashier: input.cashier,
         payment: input.payment,
         lines: input.lines,
         total,
@@ -704,31 +683,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         vat: vatOf(total, ref.current.settings),
       };
 
-      commit((prev) => {
-        const nextProducts = prev.products.map((product) => {
-          const lineMatch = input.lines.find((line) => line.sku === product.sku);
-          if (!lineMatch) return product;
-          const currentQty = product.stock[branch] ?? 0;
-          const nextQty = Math.max(0, currentQty - lineMatch.qty);
-          return {
-            ...product,
-            stock: {
-              ...product.stock,
-              [branch]: nextQty,
-            },
-          };
-        });
-
-        return log(
-          `Sale #${String(sale.receipt).padStart(4, "0")}`,
-          `${branchLabel(branch)} · ${cashierDisplayName} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
-        )({
-          ...prev,
-          sales: [sale, ...prev.sales],
-          products: nextProducts,
-          receipt: prev.receipt + 1,
-        });
-      });
+      commit((prev) => log(
+        `Sale #${String(sale.receipt).padStart(4, "0")}`,
+        `${branchLabel(branch)} · ${input.cashier} · ${input.payment} · TZS ${total.toLocaleString("en-US")}`,
+      )({
+        ...prev,
+        sales: [sale, ...prev.sales],
+        receipt: prev.receipt + 1,
+      }));
 
       await refreshData();
       return sale;
@@ -894,10 +856,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
-
-// ============================================
-// ✅✅✅ CRITICAL EXPORTS - MUST BE HERE ✅✅✅
-// ============================================
 
 export function useToto() {
   const ctx = useContext(StoreContext);
