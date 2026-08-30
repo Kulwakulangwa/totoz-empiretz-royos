@@ -2058,7 +2058,7 @@ export function ReturnsSection({
               Return items · receipt #{sale ? String(sale.receipt).padStart(4, "0") : ""}
             </DialogTitle>
             <DialogDescription>
-              Choose how many units of each line are coming back.
+              {sale ? `Original shop: ${branchLabel(sale.branch)}. Returned stock will be credited back here.` : "Choose how many units of each line are coming back."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
