@@ -417,7 +417,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     );
   }, [state.products]);
 
-  // ✅ addProduct – accepts explicit branchOverride
   const addProduct = useCallback(async (
     input: ProductInput,
     branchOverride?: ShopId
@@ -498,7 +497,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  // ✅ updateProduct – accepts explicit branchOverride (for branch update if needed)
   const updateProduct = useCallback(async (
     sku: string,
     input: ProductInput,
@@ -511,7 +509,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     let nextImagePath = oldProduct?.imagePath ?? null;
     let uploadedImagePath: string | null = null;
 
-    // Determine branch if we need to update it (optional)
     let newBranch = branchOverride;
     if (!newBranch) {
       const keys = Object.keys(input.stock) as ShopId[];
@@ -536,7 +533,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       };
       if (newBranch && oldProduct) {
         const currentBranchId = getBranchUuid(productBranch(oldProduct));
-        // Only update branch if it changed
         if (getBranchUuid(newBranch) !== currentBranchId) {
           updateData.branch_id = getBranchUuid(newBranch);
         }
@@ -612,7 +608,6 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  // recordSale (unchanged, but fixed)
   const recordSale = useCallback(async (input: {
     branch: BranchId;
     cashier: string;
