@@ -1897,6 +1897,30 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
           </button>
         </div>
 
+        <div className="mt-4 rounded-xl border border-violet-100 bg-gradient-to-r from-violet-50 via-white to-pink-50 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Profit formula
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-slate-700">
+            <span>{money(grossRevenue)}</span>
+            <span>−</span>
+            <span>{money(salesVat)}</span>
+            <span>−</span>
+            <span>{money(costOfGoods)}</span>
+            <span>−</span>
+            <span>{money(expenseTotal)}</span>
+            <span>=</span>
+            <span className={cn("font-semibold", netProfit >= 0 ? "text-emerald-600" : "text-rose-600")}>
+              {money(netProfit)}
+            </span>
+          </div>
+          <div className="mt-2 text-[12px] text-slate-600">
+            {netProfit >= 0
+              ? "This is a positive result because sales after VAT and stock cost are still above your expenses."
+              : "This is a negative result because your total expenses and stock cost are higher than the net sales for this period."}
+          </div>
+        </div>
+
         {selectedRows.length ? (
           <div className="mt-4 grid gap-2 sm:grid-cols-2">
             {selectedRows.map((row, index) => (
