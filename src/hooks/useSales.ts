@@ -7,9 +7,9 @@ export function useSales() {
   const [sales, setSales] = useState<(Sale & { items?: SaleItem[] })[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { staffProfile, isOwner, isManager } = useAuth();
+  const { staffProfile, isOwner } = useAuth();
   const branchId = staffProfile?.branch_id ? getBranchUuid(staffProfile.branch_id) : null;
-  const isPrivileged = isOwner || isManager;
+  const canReadAllBranches = isOwner;
 
   const fetchSales = async () => {
     try {
@@ -23,7 +23,7 @@ export function useSales() {
           cashier:staff(full_name)
         `);
 
-      if (!isPrivileged && branchId) {
+      if (!canReadAllBranches && branchId) {
         query = query.eq('branch_id', branchId);
       }
 
@@ -151,7 +151,7 @@ export function useSales() {
         `)
         .eq('receipt_number', receiptNumber);
 
-      if (!isPrivileged && branchId) {
+      if (!canReadAllBranches && branchId) {
         query = query.eq('branch_id', branchId);
       }
 
@@ -166,10 +166,10 @@ export function useSales() {
   };
 
   useEffect(() => {
-    if (branchId || isPrivileged) {
+    if (branchId || canReadAllBranches) {
       fetchSales();
     }
-  }, [branchId, isPrivileged]);
+  }, [branchId, canReadAllBranches]);
 
   return {
     sales,

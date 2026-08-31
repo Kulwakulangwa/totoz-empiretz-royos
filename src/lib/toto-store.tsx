@@ -167,25 +167,32 @@ const PRODUCT_IMAGE_BUCKET = "product-images";
 
 const norm = (v: string) => v.trim().toLowerCase();
 
-function productImageUrl(path?: string | null) {
+async function productImageUrl(path?: string | null) {
   if (!path) return null;
-  return supabase.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+  const { data, error } = await supabase.storage
+    .from(PRODUCT_IMAGE_BUCKET)
+    .createSignedUrl(path, 60 * 60);
+  if (error) {
+    console.error("Error signing product image URL:", error);
+    return null;
+  }
+  return data?.signedUrl ?? null;
 }
 
-function imagePathForProduct(sku: string) {
+function imagePathForProduct(sku: string, branch: ShopId) {
   const safeSku = sku
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/(^-+|-+$)/g, "");
-  return `${safeSku || "product"}/${Date.now()}.webp`;
+  return `${getBranchUuid(branch)}/${safeSku || "product"}/${Date.now()}.webp`;
 }
 
-async function uploadProductImage(sku: string, file?: File | null) {
+async function uploadProductImage(sku: string, branch: ShopId, file?: File | null) {
   if (!file) return null;
 
   const image = await compressProductImage(file);
-  const path = imagePathForProduct(sku);
+  const path = imagePathForProduct(sku, branch);
   const { error } = await supabase.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, image.blob, {
     cacheControl: "31536000",
     contentType: "image/webp",
@@ -284,19 +291,19 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     setError(null);
 
     try {
-      const isPrivileged = role === "owner" || role === "manager";
+      const isOwner = role === "owner";
       const userBranch = staffProfile?.branch_id;
       const userBranchUuid = userBranch ? getBranchUuid(userBranch) : null;
 
       let productsQuery = supabase.from('products').select('*');
-      if (!isPrivileged && userBranchUuid) {
+      if (!isOwner && userBranchUuid) {
         productsQuery = productsQuery.eq('branch_id', userBranchUuid);
       }
 
       const { data: productsData, error: productsError } = await productsQuery;
       if (productsError) throw productsError;
 
-      const mappedProducts: Product[] = (productsData || []).map(p => {
+      const mappedProducts: Product[] = await Promise.all((productsData || []).map(async (p) => {
         const branch = getBranchIdFromUuid(p.branch_id);
         return {
           branch,
@@ -309,9 +316,9 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           min: Number(p.min_stock) || 5,
           stock: { [branch]: Number(p.quantity) || 0 } as Partial<Record<ShopId, number>>,
           imagePath: p.image_path || null,
-          imageUrl: productImageUrl(p.image_path || null),
+          imageUrl: await productImageUrl(p.image_path || null),
         };
-      });
+      }));
 
       let salesQuery = supabase
         .from('sales')
@@ -320,7 +327,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           sale_items(*)
         `);
 
-      if (!isPrivileged && userBranchUuid) {
+      if (!isOwner && userBranchUuid) {
         salesQuery = salesQuery.eq('branch_id', userBranchUuid);
       }
 
@@ -352,7 +359,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       });
 
       let expensesQuery = supabase.from('expenses').select('*');
-      if (!isPrivileged && userBranchUuid) {
+      if (!isOwner && userBranchUuid) {
         expensesQuery = expensesQuery.eq('branch_id', userBranchUuid);
       }
 
@@ -449,7 +456,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
     try {
       if (input.imageFile) {
-        imagePath = await uploadProductImage(sku, input.imageFile);
+        imagePath = await uploadProductImage(sku, branch, input.imageFile);
       }
 
       const { data, error } = await supabase
@@ -484,7 +491,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         min: Math.max(0, Number(input.min) || 0),
         stock: { [branch]: quantity } as Partial<Record<ShopId, number>>,
         imagePath,
-        imageUrl: productImageUrl(imagePath),
+        imageUrl: await productImageUrl(imagePath),
       };
 
       commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode}`));
@@ -517,7 +524,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
     try {
       if (input.imageFile) {
-        uploadedImagePath = await uploadProductImage(sku, input.imageFile);
+        uploadedImagePath = await uploadProductImage(sku, newBranch || lookupBranch, input.imageFile);
         nextImagePath = uploadedImagePath;
       } else if (input.removeImage) {
         nextImagePath = null;
@@ -659,28 +666,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           throw itemError;
         }
 
-        const { data: product, error: productError } = await supabase
-          .from('products')
-          .select('quantity')
-          .eq('sku', line.sku)
-          .eq('branch_id', getBranchUuid(branch))
-          .single();
+        const { error: updateError } = await supabase.rpc('decrement_product_quantity_by_sku', {
+          product_sku: line.sku,
+          product_branch_id: getBranchUuid(branch),
+          quantity_to_decrement: line.qty,
+        });
 
-        if (productError) {
-          console.error('Product not found:', line.sku, productError);
-          continue;
-        }
-
-        if (product) {
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({ quantity: Math.max(0, (product.quantity || 0) - line.qty) })
-            .eq('sku', line.sku)
-            .eq('branch_id', getBranchUuid(branch));
-
-          if (updateError) {
-            console.error('Inventory update error:', updateError);
-          }
+        if (updateError) {
+          console.error('Inventory update error:', updateError);
         }
       }
 
@@ -809,12 +802,12 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     }
   }, [commit, refreshData]);
 
-  const addStaff = useCallback(async (s: Staff) => {
-    console.log('Add staff:', s);
+  const addStaff = useCallback(async (_s: Staff) => {
+    return;
   }, []);
 
-  const removeStaff = useCallback(async (name: string) => {
-    console.log('Remove staff:', name);
+  const removeStaff = useCallback(async (_name: string) => {
+    return;
   }, []);
 
   const updateSettings = useCallback(async (patch: Partial<TaxSettings>) => {

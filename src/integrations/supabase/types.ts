@@ -339,6 +339,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      decrement_product_quantity_by_sku: {
+        Args: {
+          product_branch_id: string
+          product_sku: string
+          quantity_to_decrement: number
+        }
+        Returns: undefined
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

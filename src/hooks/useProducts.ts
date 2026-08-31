@@ -7,9 +7,9 @@ export function useProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { staffProfile, isOwner, isManager } = useAuth();
+  const { staffProfile, isOwner } = useAuth();
   const branchId = staffProfile?.branch_id ? getBranchUuid(staffProfile.branch_id) : null;
-  const isPrivileged = isOwner || isManager;
+  const canReadAllBranches = isOwner;
 
   const fetchProducts = async () => {
     try {
@@ -18,7 +18,7 @@ export function useProducts() {
 
       let query = supabase.from('products').select('*');
 
-      if (!isPrivileged && branchId) {
+      if (!canReadAllBranches && branchId) {
         query = query.eq('branch_id', branchId);
       }
 
@@ -115,7 +115,7 @@ export function useProducts() {
         .select('*')
         .eq('barcode', barcode);
 
-      if (!isPrivileged && branchId) {
+      if (!canReadAllBranches && branchId) {
         query = query.eq('branch_id', branchId);
       }
 
@@ -134,10 +134,10 @@ export function useProducts() {
   };
 
   useEffect(() => {
-    if (branchId || isPrivileged) {
+    if (branchId || canReadAllBranches) {
       fetchProducts();
     }
-  }, [branchId, isPrivileged]);
+  }, [branchId, canReadAllBranches]);
 
   return {
     products,

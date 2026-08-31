@@ -12,11 +12,6 @@ import { useAuth } from "@/hooks/use-auth";
 function AppContent() {
   const { role, loading, user } = useAuth();
 
-  // Debug
-  console.log("AppContent - User:", user?.email);
-  console.log("AppContent - Role:", role);
-  console.log("AppContent - Loading:", loading);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">

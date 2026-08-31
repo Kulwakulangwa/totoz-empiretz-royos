@@ -221,7 +221,7 @@ export function useAuth() {
     loading,
     error,
     isOwner: role === "owner",
-    isManager: role === "owner" || role === "manager",
+    isManager: role === "manager",
     isCashier: role === "cashier",
     signInWithMagicLink,
     signOut,

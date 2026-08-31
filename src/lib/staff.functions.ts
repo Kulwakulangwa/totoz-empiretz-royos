@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getBranchIdFromUuid, getBranchUuid } from "@/lib/toto-data";
+import { getBranchIdFromUuid, getBranchUuid, shopIds, type ShopId } from "@/lib/toto-data";
 
 export type StaffAccount = {
   id: string;
@@ -13,40 +13,65 @@ export type StaffAccount = {
   isActive: boolean;
 };
 
-async function getActorRole(context: any): Promise<"owner" | "manager" | "cashier"> {
+type ActorProfile = {
+  role: "owner" | "manager" | "cashier";
+  branchId: string;
+};
+
+const branchSchema = z.custom<ShopId>(
+  (value) => typeof value === "string" && shopIds.includes(value as ShopId),
+  "Invalid branch",
+);
+
+async function getActorProfile(context: any): Promise<ActorProfile> {
   const { supabase, userId } = context;
   const { data, error } = await supabase
     .from("staff")
-    .select("role")
+    .select("role, branch_id")
     .eq("user_id", userId)
     .single();
   if (error || !data) {
     throw new Response("Forbidden - staff access required", { status: 403 });
   }
 
-  return data.role as "owner" | "manager" | "cashier";
+  return {
+    role: data.role as "owner" | "manager" | "cashier",
+    branchId: data.branch_id,
+  };
 }
 
 async function assertStaffAdmin(context: any) {
-  const role = await getActorRole(context);
-  if (role !== "owner" && role !== "manager") {
+  const actor = await getActorProfile(context);
+  if (actor.role !== "owner" && actor.role !== "manager") {
     throw new Response("Forbidden - owner or manager access required", { status: 403 });
   }
-  return role;
+  return actor;
+}
+
+function assertManagerCanManageBranch(actor: ActorProfile, branchUuid: string) {
+  if (actor.role === "manager" && actor.branchId !== branchUuid) {
+    throw new Response("Forbidden - managers can only manage their assigned branch", { status: 403 });
+  }
 }
 
 export const listStaff = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<StaffAccount[]> => {
-    await assertStaffAdmin(context);
+    const actor = await assertStaffAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    const { data: staff, error: staffError } = await supabaseAdmin
+    let query = supabaseAdmin
       .from("staff")
       .select("*");
-    if (staffError) throw new Error(staffError.message);
+    if (actor.role === "manager") {
+      query = query.eq("branch_id", actor.branchId).eq("role", "cashier");
+    }
 
-    return staff.map((s) => ({
+    const { data: staff, error: staffError } = await query;
+    if (staffError) throw new Error(staffError.message);
+    const staffRows = staff ?? [];
+
+    return staffRows.map((s) => ({
       id: s.id,
       email: s.email,
       fullName: s.full_name,
@@ -65,14 +90,14 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         email: z.string().email(),
         password: z.string().min(6).max(72),
         fullName: z.string().trim().min(1).max(80),
-        branch: z.string(),
+        branch: branchSchema,
         role: z.enum(["owner", "manager", "cashier"]),
       })
       .parse(data),
   )
   .handler(async ({ context, data }) => {
-    const actorRole = await assertStaffAdmin(context);
-    if (actorRole === "manager" && data.role !== "cashier") {
+    const actor = await assertStaffAdmin(context);
+    if (actor.role === "manager" && data.role !== "cashier") {
       throw new Response("Forbidden - managers can only create cashier accounts", { status: 403 });
     }
 
@@ -80,14 +105,12 @@ export const createStaffAccount = createServerFn({ method: "POST" })
 
     const email = data.email.toLowerCase().trim();
     const branchUuid = getBranchUuid(data.branch);
-    if (!branchUuid) {
-      throw new Error(`Invalid branch: ${data.branch}`);
-    }
+    assertManagerCanManageBranch(actor, branchUuid);
 
     // 1. Check existing staff by email (case-insensitive)
     let { data: staffByEmail, error: findError } = await supabaseAdmin
       .from("staff")
-      .select("id, user_id, is_active")
+      .select("id, user_id, branch_id, role, is_active")
       .ilike("email", email)
       .maybeSingle();
 
@@ -97,6 +120,10 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     }
 
     if (staffByEmail) {
+      if (actor.role === "manager" && (staffByEmail.branch_id !== actor.branchId || staffByEmail.role !== "cashier")) {
+        throw new Response("Forbidden - managers can only reactivate cashiers in their assigned branch", { status: 403 });
+      }
+
       if (staffByEmail.is_active) {
         throw new Error(`A staff account with email ${email} already exists and is active.`);
       }
@@ -111,7 +138,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
         })
         .eq("id", staffByEmail.id);
       if (updateError) throw updateError;
-      console.log(`✅ Reactivated inactive staff: ${email}`);
+      console.info("Reactivated inactive staff account");
       return { id: staffByEmail.id, email };
     }
 
@@ -131,7 +158,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
     if (authUserId) {
       const { data: staffByUserId, error: userIdCheckError } = await supabaseAdmin
         .from("staff")
-        .select("id, is_active")
+        .select("id, branch_id, role, is_active")
         .eq("user_id", authUserId)
         .maybeSingle();
 
@@ -140,6 +167,10 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       }
 
       if (staffByUserId) {
+        if (actor.role === "manager" && (staffByUserId.branch_id !== actor.branchId || staffByUserId.role !== "cashier")) {
+          throw new Response("Forbidden - managers can only update cashiers in their assigned branch", { status: 403 });
+        }
+
         const { error: updateError } = await supabaseAdmin
           .from("staff")
           .update({
@@ -151,7 +182,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
           })
           .eq("id", staffByUserId.id);
         if (updateError) throw updateError;
-        console.log(`✅ Updated existing staff for auth user: ${email}`);
+        console.info("Updated existing staff account");
         return { id: staffByUserId.id, email };
       }
 
@@ -171,7 +202,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       if (staffError) {
         throw new Error(staffError.message);
       }
-      console.log(`✅ Created staff for existing auth user: ${email}`);
+      console.info("Created staff profile for existing auth user");
       return { id: authUserId, email };
     }
 
@@ -205,7 +236,7 @@ export const createStaffAccount = createServerFn({ method: "POST" })
       throw new Error(staffError.message);
     }
 
-    console.log(`✅ Created new staff account: ${email}`);
+    console.info("Created new staff account");
     return { id: newUserId, email };
   });
 
@@ -213,12 +244,12 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ context, data }) => {
-    const actorRole = await assertStaffAdmin(context);
+    const actor = await assertStaffAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     const { data: staff, error: staffFindError } = await supabaseAdmin
       .from("staff")
-      .select("user_id, role")
+      .select("user_id, role, branch_id")
       .eq("id", data.id)
       .single();
     if (staffFindError || !staff) {
@@ -229,8 +260,13 @@ export const deleteStaffAccount = createServerFn({ method: "POST" })
       throw new Error("You cannot remove your own account");
     }
 
-    if (actorRole === "manager" && staff.role !== "cashier") {
-      throw new Response("Forbidden - managers can only remove cashier accounts", { status: 403 });
+    if (actor.role === "manager") {
+      if (staff.role !== "cashier") {
+        throw new Response("Forbidden - managers can only remove cashier accounts", { status: 403 });
+      }
+      if (staff.branch_id !== actor.branchId) {
+        throw new Response("Forbidden - managers can only remove cashiers in their assigned branch", { status: 403 });
+      }
     }
 
     const { error: deleteAuthError } = await supabaseAdmin.auth.admin.deleteUser(staff.user_id);

@@ -1,29 +1,35 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 import { colors } from "@/lib/toto-data";
-import { Mail, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export function AuthPage() {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const { signInWithMagicLink, error: authError, user } = useAuth();
   const navigate = useNavigate();
-
-  if (user) {
-    navigate({ to: "/dashboard" });
-    return null;
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
+    if (!email.trim() || !password) {
+      toast("Enter your email and password.");
+      return;
+    }
+
     setIsLoading(true);
-    const { error } = await signInWithMagicLink(email);
-    setIsLoading(false);
-    if (!error) {
-      setSent(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+      navigate({ to: "/dashboard" });
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Sign in failed");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -49,8 +55,7 @@ export function AuthPage() {
             </div>
 
             <div className="mt-6">
-              {!sent ? (
-                <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-[#2b2b35]">
                       Email
@@ -73,20 +78,18 @@ export function AuthPage() {
                     <input
                       id="password"
                       type="password"
+                      required
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       placeholder="Password"
                       className="w-full rounded-md border border-[#dfe0e6] bg-[#f9f9fb] px-3 py-2.5 text-sm text-[#1d1d26] outline-none transition focus:border-[#6b48b5] focus:ring-2 focus:ring-[#e7d9ff]"
                     />
                   </div>
 
-                  {authError && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
-                      {authError}
-                    </div>
-                  )}
-
                   <button
                     type="submit"
-                    disabled={isLoading || !email}
+                    disabled={isLoading || !email || !password}
                     className="flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_25px_rgba(91,58,150,0.25)] transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
                     style={{
                       background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
@@ -102,26 +105,6 @@ export function AuthPage() {
                     )}
                   </button>
                 </form>
-              ) : (
-                <div className="py-8 text-center">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-                    <Mail className="h-7 w-7 text-green-600" />
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold text-[#23232d]">Check your inbox</h3>
-                  <p className="mt-2 text-sm text-[#5c5868]">
-                    We sent a sign-in link to <strong className="text-[#1d1d26]">{email}</strong>.
-                  </p>
-                  <button
-                    onClick={() => {
-                      setSent(false);
-                      setEmail("");
-                    }}
-                    className="mt-4 text-sm font-medium text-[#5B3A96] hover:underline"
-                  >
-                    ← Back to login
-                  </button>
-                </div>
-              )}
             </div>
 
             <div className="mt-5 text-center text-[11px] text-[#7a728c]">
