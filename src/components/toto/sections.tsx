@@ -783,8 +783,6 @@ export function InventorySection({ shop }: { shop: BranchId }) {
   const [qrProduct, setQrProduct] = useState<Product | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
-  const pickingImageRef = useRef(false);
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [adjust, setAdjust] = useState<{
     sku: string;
     branch: ShopId;
@@ -803,22 +801,6 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     };
   }, [imagePreview]);
 
-  useEffect(() => {
-    function releasePickerAfterReturn() {
-      window.setTimeout(() => {
-        pickingImageRef.current = false;
-        setIsProcessingImage(false);
-      }, 2000);
-    }
-
-    window.addEventListener("focus", releasePickerAfterReturn);
-    window.addEventListener("pageshow", releasePickerAfterReturn);
-    return () => {
-      window.removeEventListener("focus", releasePickerAfterReturn);
-      window.removeEventListener("pageshow", releasePickerAfterReturn);
-    };
-  }, []);
-
   function setPreview(next: string | null) {
     setImagePreview((current) => {
       if (current?.startsWith("blob:")) URL.revokeObjectURL(current);
@@ -833,8 +815,6 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     setEditingBranch(null);
     setForm({ ...emptyProduct, stock: {} });
     setPreview(null);
-    pickingImageRef.current = false;
-    setIsProcessingImage(false);
   }
 
   function openNew() {
@@ -871,18 +851,11 @@ export function InventorySection({ shop }: { shop: BranchId }) {
 
   function startImagePick(input: HTMLInputElement | null) {
     if (!input) return;
-    pickingImageRef.current = true;
-    setIsProcessingImage(true);
     input.value = "";
     input.click();
   }
 
   function chooseImage(file?: File) {
-    window.setTimeout(() => {
-      pickingImageRef.current = false;
-      setIsProcessingImage(false);
-    }, 600);
-
     if (!file) return;
 
     try {
@@ -1075,32 +1048,30 @@ export function InventorySection({ shop }: { shop: BranchId }) {
       <Dialog
         open={open}
         onOpenChange={(next) => {
+          // Android can emit a dismiss event when the external camera returns.
+          // Closing is handled only by the explicit controls below.
           if (next) {
             setOpen(true);
-            return;
           }
-
-          if (pickingImageRef.current || isProcessingImage) {
-            setOpen(true);
-            return;
-          }
-
-          closeProductDialog();
         }}
       >
         <DialogContent
           className="max-h-[85vh] overflow-y-auto sm:max-w-lg"
-          onFocusOutside={(event) => {
-            if (pickingImageRef.current || isProcessingImage) {
-              event.preventDefault();
-            }
-          }}
-          onPointerDownOutside={(event) => {
-            if (pickingImageRef.current || isProcessingImage) {
-              event.preventDefault();
-            }
+          showCloseButton={false}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => {
+            event.preventDefault();
+            closeProductDialog();
           }}
         >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute right-4 top-4 cursor-pointer rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            onClick={closeProductDialog}
+          >
+            <X className="h-4 w-4" />
+          </button>
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
             <DialogDescription>
