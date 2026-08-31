@@ -1547,13 +1547,14 @@ export function StaffSection({ shop }: { shop: BranchId }) {
   });
 
   const currentBranchName = branchLabel(shop);
+  const staffBranch: ShopId = shop === "all" ? "toto" : shop;
 
   const { data: people = [], isLoading, error } = useQuery({
-    queryKey: ["staff-accounts"],
-    queryFn: () => listStaffFn(),
+    queryKey: ["staff-accounts", staffBranch],
+    queryFn: () => listStaffFn({ data: { branch: staffBranch } }),
   });
 
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ["staff-accounts"] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["staff-accounts", staffBranch] });
 
   const submit = async () => {
     if (!form.name.trim()) {
@@ -1575,7 +1576,7 @@ export function StaffSection({ shop }: { shop: BranchId }) {
           email: form.email.trim().toLowerCase(),
           password: form.password,
           fullName: form.name.trim(),
-          branch: shop,
+          branch: staffBranch,
           role: form.role,
         },
       });

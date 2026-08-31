@@ -56,15 +56,25 @@ function assertManagerCanManageBranch(actor: ActorProfile, branchUuid: string) {
 
 export const listStaff = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }): Promise<StaffAccount[]> => {
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        branch: branchSchema,
+      })
+      .parse(data),
+  )
+  .handler(async ({ context, data }): Promise<StaffAccount[]> => {
     const actor = await assertStaffAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const branchUuid = getBranchUuid(data.branch);
+    assertManagerCanManageBranch(actor, branchUuid);
 
     let query = supabaseAdmin
       .from("staff")
-      .select("*");
+      .select("*")
+      .eq("branch_id", branchUuid);
     if (actor.role === "manager") {
-      query = query.eq("branch_id", actor.branchId).eq("role", "cashier");
+      query = query.eq("role", "cashier");
     }
 
     const { data: staff, error: staffError } = await query;

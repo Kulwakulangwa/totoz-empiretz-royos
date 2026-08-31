@@ -6,16 +6,16 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign in | Toto Empire Retail" },
+      { title: "Sign in | Totoz Empire Retail" },
       {
         name: "description",
         content:
-          "Sign in to Toto Empire to run the point of sale, manage inventory, returns, VAT receipts and branch reports.",
+          "Sign in to Totoz Empire to run the point of sale, manage inventory, returns, VAT receipts and branch reports.",
       },
-      { property: "og:title", content: "Sign in | Toto Empire Retail" },
+      { property: "og:title", content: "Sign in | Totoz Empire Retail" },
       {
         property: "og:description",
-        content: "Secure staff sign-in for Toto Empire point of sale and shop management.",
+        content: "Secure staff sign-in for Totoz Empire point of sale and shop management.",
       },
     ],
   }),
@@ -68,7 +68,7 @@ function AuthPage() {
           </div>
 
           <div className="text-center">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.24em] text-[#7a728c]">Toto Empire</div>
+            <div className="text-[12px] font-semibold uppercase tracking-[0.24em] text-[#7a728c]">Totoz Empire</div>
             <h1 className="mt-4 text-[34px] font-bold leading-tight text-[#23232d]">Staff sign in</h1>
           </div>
 

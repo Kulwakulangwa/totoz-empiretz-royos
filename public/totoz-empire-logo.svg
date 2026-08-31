@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Totoz Empire">
+  <rect width="64" height="64" rx="14" fill="#241B35"/>
+  <path d="M14 18h36v8H36v24h-8V26H14z" fill="#FFFFFF"/>
+  <path d="M39 34h11v6h-11v4h13v6H31V30h21v6H39z" fill="#E93FA0"/>
+  <path d="M12 12h40v5H12z" fill="#3ECFC0"/>
+</svg>

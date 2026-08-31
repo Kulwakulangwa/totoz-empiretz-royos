@@ -78,22 +78,21 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Toto Empire Retail Management System" },
+      { title: "Totoz Empire Retail Management System" },
       {
         name: "description",
         content:
-          "Retail management system for Toto Empire: five branches, POS, inventory, expenses and owner reporting.",
+          "Retail management system for Totoz Empire: five branches, POS, inventory, expenses and owner reporting.",
       },
-      { name: "author", content: "Toto Empire" },
-      { property: "og:title", content: "Toto Empire Retail Management System" },
+      { name: "author", content: "Totoz Empire" },
+      { property: "og:title", content: "Totoz Empire Retail Management System" },
       {
         property: "og:description",
         content:
-          "Five-branch retail management: POS, inventory, expenses, staff roles and branch reports.",
+          "Five-branch retail management for Totoz Empire: POS, inventory, expenses, staff roles and branch reports.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -106,7 +105,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/totoz-empire-logo.svg", type: "image/svg+xml" },
     ],
   }),
   shellComponent: RootShell,

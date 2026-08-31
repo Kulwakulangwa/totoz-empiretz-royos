@@ -5,16 +5,16 @@ export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Sign in | Toto Empire Retail" },
+      { title: "Sign in | Totoz Empire Retail" },
       {
         name: "description",
         content:
-          "Staff sign in for Toto Empire: point of sale, returns, inventory, VAT/EFD receipts and branch reports.",
+          "Staff sign in for Totoz Empire: point of sale, returns, inventory, VAT/EFD receipts and branch reports.",
       },
-      { property: "og:title", content: "Sign in | Toto Empire Retail" },
+      { property: "og:title", content: "Sign in | Totoz Empire Retail" },
       {
         property: "og:description",
-        content: "Secure staff sign-in for Toto Empire shop management.",
+        content: "Secure staff sign-in for Totoz Empire shop management.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
