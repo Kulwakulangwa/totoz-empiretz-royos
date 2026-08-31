@@ -70,7 +70,7 @@ export type TaxSettings = {
 };
 
 export const defaultTaxSettings: TaxSettings = {
-  businessName: "Toto Empire",
+  businessName: "Totoz Empire",
   address: "Dar es Salaam, Tanzania",
   phone: "",
   tin: "",
@@ -78,7 +78,7 @@ export const defaultTaxSettings: TaxSettings = {
   efdSerial: "",
   vatEnabled: true,
   vatRate: 18,
-  receiptFooter: "Thank you for shopping with Toto Empire",
+  receiptFooter: "Thank you for shopping with Totoz Empire",
 };
 
 export const vatOf = (gross: number, settings: TaxSettings) =>

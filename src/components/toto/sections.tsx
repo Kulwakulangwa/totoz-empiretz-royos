@@ -414,6 +414,12 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               color: #111827;
               background: #fff;
             }
+            .receipt-logo {
+              width: 44px;
+              height: 44px;
+              margin: 0 auto 8px;
+              border-radius: 10px;
+            }
             .receipt {
               width: 100%;
               max-width: 360px;
@@ -433,7 +439,8 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         <body>
           <div class="receipt">
             <div class="center">
-              <h2>Toto Empire</h2>
+              <img class="receipt-logo" src="/totoz-empire-logo.svg" alt="Totoz Empire" />
+              <h2>Totoz Empire</h2>
               <p>Retail Management</p>
             </div>
             <div class="meta">
@@ -458,7 +465,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
             </table>
             <div class="meta total">Grand Total: ${money(sale.total)}</div>
             <div class="meta">VAT: ${money(sale.vat)}</div>
-            <div class="center" style="margin-top: 16px; font-size: 11px;">Thank you for shopping with Toto Empire</div>
+            <div class="center" style="margin-top: 16px; font-size: 11px;">Thank you for shopping with Totoz Empire</div>
           </div>
         </body>
       </html>

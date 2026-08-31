@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { AppLogo } from "@/components/toto/AppLogo";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -61,11 +62,7 @@ function AuthPage() {
     <main className="grid min-h-screen place-items-center bg-[#0b0b10] px-4 py-12">
       <div className="w-full max-w-[780px] rounded-[28px] bg-[#f3f3f5] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.28)] sm:p-8">
         <div className="rounded-[20px] bg-[#f7f7f9] p-5 shadow-[inset_0_0_0_1px_rgba(29,30,38,0.05)] sm:p-8">
-          <div className="mx-auto mb-5 flex w-[76px] items-center justify-center rounded-xl border border-[#e4e3ea] bg-[#f3ecff] px-2 py-2.5">
-            <div className="grid size-10 place-items-center rounded-md bg-gradient-to-br from-[#5B3A96] to-[#E93FA0] text-sm font-bold text-white">
-              TE
-            </div>
-          </div>
+          <AppLogo className="mx-auto mb-5 size-14" />
 
           <div className="text-center">
             <div className="text-[12px] font-semibold uppercase tracking-[0.24em] text-[#7a728c]">Totoz Empire</div>

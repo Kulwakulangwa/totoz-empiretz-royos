@@ -1,5 +1,6 @@
 import { BranchId, colors } from "@/lib/toto-data";
-import { ArrowLeft, Store, LogOut, Bell, Search } from "lucide-react";
+import { AppLogo } from "./AppLogo";
+import { ArrowLeft, LogOut, Bell, Search } from "lucide-react";
 
 interface BranchDashboardHeaderProps {
   branchName: string;
@@ -13,15 +14,12 @@ interface BranchDashboardHeaderProps {
 
 export function BranchDashboardHeader({
   branchName,
-  branchId,
   userEmail,
   role,
   onSwitchBranch,
   onLogout,
   canSwitchBranch = true,
 }: BranchDashboardHeaderProps) {
-  const isTotozEmpireBrand = branchId === "toto" || branchName.toLowerCase().includes("totoz");
-
   return (
     <div className="border-b border-[#F0EEF4] bg-white px-4 py-3 flex-shrink-0">
       <div className="max-w-full flex flex-wrap items-center justify-between gap-3">
@@ -43,25 +41,7 @@ export function BranchDashboardHeader({
         {/* Center: Branch Info + Search */}
         <div className="flex items-center gap-4 flex-1 max-w-md">
           <div className="flex items-center gap-2">
-            <div
-              className="relative flex size-12 items-center justify-center rounded-full"
-              style={{
-                background: "linear-gradient(135deg, #f72585 0%, #ff8a00 20%, #ffbe0b 35%, #ff5d8f 52%, #7b2cbf 75%, #5b3a96 100%)",
-                boxShadow: "0 0 0 2px rgba(91,58,150,0.08)",
-              }}
-            >
-              <div className="flex size-10 items-center justify-center rounded-full border-2 bg-white" style={{ borderColor: "#EDE7F8" }}>
-                <div className="flex flex-col items-center justify-center leading-none">
-                  <div className="flex items-center justify-center gap-1">
-                    <span className="block h-1.5 w-1.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(18deg)" }} />
-                    <span className="block h-1.5 w-1.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(-18deg)" }} />
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-center rounded-full border border-[#5B3A96] bg-[#F6D9EA] px-1 py-0.5">
-                    <span className="text-[6px] font-black tracking-[-0.16em] text-[#5B3A96]">T</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AppLogo className="size-12" />
             <div>
               <h1 className="text-sm font-semibold" style={{ color: colors.textDark }}>
                 {branchName}

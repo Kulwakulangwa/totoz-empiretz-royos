@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { colors } from "@/lib/toto-data";
+import { AppLogo } from "@/components/toto/AppLogo";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,19 +39,10 @@ export function AuthPage() {
       <div className="w-full max-w-4xl rounded-[20px] bg-[#f4f4f6] p-4 sm:p-6 shadow-[0_30px_80px_rgba(0,0,0,0.25)]">
         <div className="grid items-center gap-6 md:grid-cols-[1.05fr_1fr]">
           <div className="rounded-[18px] bg-white p-5 shadow-sm ring-1 ring-black/5 sm:p-7">
-            <div className="mx-auto mb-5 flex w-[72px] items-center justify-center rounded-xl border border-[#e4e3ea] bg-[#f4f2fa] px-2 py-2.5">
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-md text-xs font-bold text-white"
-                style={{
-                  background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
-                }}
-              >
-                TE
-              </div>
-            </div>
+            <AppLogo className="mx-auto mb-5 size-14" />
 
             <div className="text-center">
-              <div className="text-[11px] uppercase tracking-[0.25em] font-semibold text-[#7a728c]">Toto Empire</div>
+              <div className="text-[11px] uppercase tracking-[0.25em] font-semibold text-[#7a728c]">Totoz Empire</div>
               <h1 className="mt-3 text-2xl font-bold text-[#23232d]">Staff sign in</h1>
             </div>
 
@@ -115,7 +107,7 @@ export function AuthPage() {
           <div className="hidden md:flex h-full min-h-[420px] flex-col justify-center rounded-[18px] bg-[#f0f0f2] p-6 ring-1 ring-black/5">
             <div className="mx-auto flex w-full max-w-xs flex-col gap-4 rounded-[16px] bg-white p-4 shadow-sm ring-1 ring-black/5">
               <div className="flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.22em] text-[#7d7789]">
-                <span>Toto Empire</span>
+                <span>Totoz Empire</span>
                 <span className="rounded-full bg-[#efeaff] px-2 py-1 text-[#5B3A96]">Staff</span>
               </div>
               <div className="rounded-lg bg-[#f7f4fc] p-3">

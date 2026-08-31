@@ -1,5 +1,6 @@
 import { BranchId, colors, money } from "@/lib/toto-data";
 import { BranchCard } from "./BranchCard";
+import { AppLogo } from "./AppLogo";
 import { LogOut } from "lucide-react";
 
 interface BranchSummary {
@@ -59,24 +60,7 @@ export function BranchSelectionPage({
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#F0EEF4] pb-6">
           <div className="flex items-center gap-3">
-            <div
-              className="relative flex size-12 items-center justify-center rounded-full flex-shrink-0"
-              style={{
-                background: "linear-gradient(135deg, #f72585 0%, #ff8a00 20%, #ffbe0b 35%, #ff5d8f 52%, #7b2cbf 75%, #5b3a96 100%)",
-              }}
-            >
-              <div className="flex size-10 items-center justify-center rounded-full border-2 bg-white" style={{ borderColor: "#EDE7F8" }}>
-                <div className="flex flex-col items-center justify-center leading-none">
-                  <div className="flex items-center justify-center gap-1">
-                    <span className="block h-1.5 w-1.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(18deg)" }} />
-                    <span className="block h-1.5 w-1.5 rounded-full border border-[#5B3A96] bg-[#F6D9EA]" style={{ transform: "rotate(-18deg)" }} />
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-center rounded-full border border-[#5B3A96] bg-[#F6D9EA] px-1 py-0.5">
-                    <span className="text-[6px] font-black tracking-[-0.16em] text-[#5B3A96]">T</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <AppLogo className="size-12" />
             <div>
               <h1 className="text-2xl font-bold" style={{ color: colors.textDark }}>Totoz Empire</h1>
               <p className="text-sm" style={{ color: colors.textMuted }}>Retail Management</p>
