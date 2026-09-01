@@ -91,7 +91,7 @@ function ProductThumb({
 
 /* ---------------- Overview ---------------- */
 
-export function OverviewSection({ shop }: { shop: BranchId }) {
+function OverviewSection({ shop }: { shop: BranchId }) {
   const { sales, expenses, activities } = useToto();
   const scopedName = shop === "all" ? "all shops" : branchLabel(shop);
 
@@ -238,7 +238,7 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
 
 type CartItem = SaleLine & { stock: number; imageUrl?: string | null };
 
-export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
+function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const { products, recordSale, receipt } = useToto();
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -770,7 +770,7 @@ const stockLabel = (p: Product, shop?: BranchId) => {
   return parts.length ? parts.join(" · ") : "No stock yet";
 };
 
-export function InventorySection({ shop }: { shop: BranchId }) {
+function InventorySection({ shop }: { shop: BranchId }) {
   const { products, addProduct, updateProduct, removeProduct, adjustStock } = useToto();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -1321,7 +1321,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Expenses ---------------- */
 
-export function ExpensesSection({ shop }: { shop: BranchId }) {
+function ExpensesSection({ shop }: { shop: BranchId }) {
   const { expenses, addExpense, removeExpense } = useToto();
   const [open, setOpen] = useState(false);
   const fixedBranch: BranchId = shop === "all" ? "toto" : shop;
@@ -1504,7 +1504,7 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Staff ---------------- */
 
-export function StaffSection({ shop }: { shop: BranchId }) {
+function StaffSection({ shop }: { shop: BranchId }) {
   const queryClient = useQueryClient();
   const listStaffFn = useServerFn(listStaff);
   const createStaffFn = useServerFn(createStaffAccount);
@@ -1703,7 +1703,7 @@ export function StaffSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Reports ---------------- */
 
-export function ReportsSection({ shop }: { shop: BranchId }) {
+function ReportsSection({ shop }: { shop: BranchId }) {
   const store = useToto();
   const scope = <T extends { branch: BranchId }>(rows: T[]) =>
     shop === "all" ? rows : rows.filter((r) => r.branch === shop);
@@ -1921,7 +1921,7 @@ export function ReportsSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Returns ---------------- */
 
-export function ReturnsSection({
+function ReturnsSection({
   shop,
   cashier,
   isOwner,
@@ -2113,7 +2113,7 @@ export function ReturnsSection({
 
 /* ---------------- Sales ---------------- */
 
-export function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: boolean }) {
+function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: boolean }) {
   const { sales, refreshData } = useToto();
   const [currentDay, setCurrentDay] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -2214,7 +2214,7 @@ export function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner
 
 /* ---------------- Settings ---------------- */
 
-export function SettingsSection() {
+function SettingsSection() {
   const { settings, updateSettings } = useToto();
   const [form, setForm] = useState(settings);
 
@@ -2323,7 +2323,7 @@ type RequestItem = {
   maxAvailable: number;
 };
 
-export function StockRequestSection({ shop }: { shop: BranchId }) {
+function StockRequestSection({ shop }: { shop: BranchId }) {
   const { products, createStockOrder, orders } = useToto();
   const { user } = useAuth();
   const [items, setItems] = useState<RequestItem[]>([]);
@@ -2599,7 +2599,7 @@ export function StockRequestSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- NEW: Pending Orders (Owner) ---------------- */
 
-export function PendingOrdersSection({ shop }: { shop: BranchId }) {
+function PendingOrdersSection({ shop }: { shop: BranchId }) {
   const { orders, approveOrder, rejectOrder, refreshData } = useToto();
   const [processingId, setProcessingId] = useState<string | null>(null);
 
