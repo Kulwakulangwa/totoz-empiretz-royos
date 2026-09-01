@@ -57,6 +57,31 @@ export type SaleReturn = {
   restock: boolean;
 };
 
+// ========== STOCK ORDER TYPES ==========
+export type StockOrderStatus = "pending" | "approved" | "rejected" | "fulfilled";
+
+export type StockOrderItem = {
+  id?: string;
+  order_id?: string;
+  sku: string;
+  source_branch_id: string; // UUID of the store
+  quantity: number;
+};
+
+export type StockOrder = {
+  id: string;
+  target_branch_id: string; // UUID of the shop requesting
+  requested_by: string; // cashier name or email
+  status: StockOrderStatus;
+  notes?: string;
+  created_at: string;
+  approved_at?: string;
+  approved_by?: string;
+  items?: StockOrderItem[];
+};
+
+// =======================================
+
 export type TaxSettings = {
   businessName: string;
   address: string;
@@ -111,6 +136,7 @@ type State = {
   receipt: number;
   creditNote: number;
   settings: TaxSettings;
+  orders: StockOrder[]; // added
 };
 
 const EMPTY: State = {
@@ -123,6 +149,7 @@ const EMPTY: State = {
   receipt: 1,
   creditNote: 1,
   settings: defaultTaxSettings,
+  orders: [],
 };
 
 type Ctx = State & {
@@ -155,6 +182,17 @@ type Ctx = State & {
   refreshData: () => Promise<void>;
   loading: boolean;
   error: string | null;
+  // ===== NEW STOCK ORDER FUNCTIONS =====
+  createStockOrder: (input: {
+    targetBranchId: string; // UUID of the shop requesting
+    requestedBy: string;
+    notes?: string;
+    items: { sku: string; sourceBranchId: string; quantity: number }[];
+  }) => Promise<StockOrder>;
+  fetchPendingOrders: () => Promise<StockOrder[]>;
+  approveOrder: (orderId: string) => Promise<StockOrder>;
+  rejectOrder: (orderId: string) => Promise<StockOrder>;
+  pendingOrderCount: () => Promise<number>;
 };
 
 const StoreContext = createContext<Ctx | null>(null);
@@ -377,6 +415,45 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         created_by: e.created_by || undefined,
       }));
 
+      // Fetch stock orders
+      let ordersQuery = supabase.from('stock_orders').select('*');
+      if (!isOwner && userBranchUuid) {
+        ordersQuery = ordersQuery.eq('target_branch_id', userBranchUuid);
+      }
+      const { data: ordersData, error: ordersError } = await ordersQuery.order('created_at', { ascending: false });
+      if (ordersError) throw ordersError;
+
+      // Fetch order items
+      const orderIds = ordersData?.map(o => o.id) || [];
+      let itemsData: any[] = [];
+      if (orderIds.length > 0) {
+        const { data, error } = await supabase
+          .from('stock_order_items')
+          .select('*')
+          .in('order_id', orderIds);
+        if (error) throw error;
+        itemsData = data || [];
+      }
+
+      // Map orders with items
+      const mappedOrders: StockOrder[] = (ordersData || []).map(order => ({
+        id: order.id,
+        target_branch_id: order.target_branch_id,
+        requested_by: order.requested_by,
+        status: order.status,
+        notes: order.notes,
+        created_at: order.created_at,
+        approved_at: order.approved_at,
+        approved_by: order.approved_by,
+        items: itemsData.filter(item => item.order_id === order.id).map((item: any) => ({
+          id: item.id,
+          order_id: item.order_id,
+          sku: item.sku,
+          source_branch_id: item.source_branch_id,
+          quantity: item.quantity,
+        })),
+      }));
+
       const newState: State = {
         ...EMPTY,
         products: mappedProducts,
@@ -388,6 +465,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         receipt: mappedSales.length > 0 ? Math.max(...mappedSales.map(s => s.receipt)) + 1 : 1,
         creditNote: 1,
         settings: defaultTaxSettings,
+        orders: mappedOrders,
       };
 
       ref.current = newState;
@@ -821,6 +899,95 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     commit(() => ({ ...EMPTY }));
   }, [commit]);
 
+  // ========== STOCK ORDER FUNCTIONS ==========
+
+  const createStockOrder = useCallback(async (input: {
+    targetBranchId: string;
+    requestedBy: string;
+    notes?: string;
+    items: { sku: string; sourceBranchId: string; quantity: number }[];
+  }): Promise<StockOrder> => {
+    if (!input.items.length) {
+      throw new Error("Cannot create an order with no items.");
+    }
+
+    // Insert the order header
+    const { data: orderData, error: orderError } = await supabase
+      .from('stock_orders')
+      .insert({
+        target_branch_id: input.targetBranchId,
+        requested_by: input.requestedBy,
+        status: 'pending',
+        notes: input.notes || '',
+      })
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    // Insert order items
+    const itemsToInsert = input.items.map(item => ({
+      order_id: orderData.id,
+      sku: item.sku,
+      source_branch_id: item.sourceBranchId,
+      quantity: item.quantity,
+    }));
+
+    const { error: itemsError } = await supabase
+      .from('stock_order_items')
+      .insert(itemsToInsert);
+
+    if (itemsError) throw itemsError;
+
+    // Refresh orders in state
+    await refreshData();
+
+    // Return the created order
+    const newOrder = ref.current.orders.find(o => o.id === orderData.id);
+    if (!newOrder) throw new Error("Failed to load created order.");
+    return newOrder;
+  }, [refreshData]);
+
+  const fetchPendingOrders = useCallback(async (): Promise<StockOrder[]> => {
+    // This is already available in state; we can just filter
+    return ref.current.orders.filter(o => o.status === 'pending');
+  }, []);
+
+  const approveOrder = useCallback(async (orderId: string): Promise<StockOrder> => {
+    const { data, error } = await supabase.rpc('approve_order', { order_id: orderId });
+    if (error) throw error;
+
+    // Refresh data to get updated stocks and orders
+    await refreshData();
+
+    const updatedOrder = ref.current.orders.find(o => o.id === orderId);
+    if (!updatedOrder) throw new Error("Order not found after approval.");
+    return updatedOrder;
+  }, [refreshData]);
+
+  const rejectOrder = useCallback(async (orderId: string): Promise<StockOrder> => {
+    // Update the order status to 'rejected'
+    const { data, error } = await supabase
+      .from('stock_orders')
+      .update({ status: 'rejected' })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await refreshData();
+    const updatedOrder = ref.current.orders.find(o => o.id === orderId);
+    if (!updatedOrder) throw new Error("Order not found after rejection.");
+    return updatedOrder;
+  }, [refreshData]);
+
+  const pendingOrderCount = useCallback(async (): Promise<number> => {
+    const { data, error } = await supabase.rpc('pending_order_count');
+    if (error) throw error;
+    return data as number;
+  }, []);
+
   const value = useMemo<Ctx>(() => ({
     ...state,
     addProduct,
@@ -841,6 +1008,11 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     refreshData,
     loading,
     error,
+    createStockOrder,
+    fetchPendingOrders,
+    approveOrder,
+    rejectOrder,
+    pendingOrderCount,
   }), [
     state,
     addProduct,
@@ -861,6 +1033,11 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     refreshData,
     loading,
     error,
+    createStockOrder,
+    fetchPendingOrders,
+    approveOrder,
+    rejectOrder,
+    pendingOrderCount,
   ]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
