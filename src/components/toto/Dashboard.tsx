@@ -15,6 +15,8 @@ import {
   SalesSection,
   SettingsSection,
   StaffSection,
+  StockRequestSection,
+  PendingOrdersSection,
 } from "@/components/toto/sections";
 import {
   branches,
@@ -203,16 +205,18 @@ function DashboardInner() {
 
   const effectiveShop = selectedBranch;
   const data = branches.find((b) => b.id === effectiveShop) || branches[0];
+
+  // Build visible nav items based on role
+  // Owners/managers: full nav
+  // Cashiers: POS, Sales, and Stock Requests
   const visibleNav = canManageBranch
     ? navItems
-    : [
-        { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
-        { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
-      ];
+    : navItems.filter(item => item.id === "pos" || item.id === "sales" || item.id === "stock-requests");
+
   const activeSection: SectionId = canManageBranch
     ? (section as SectionId)
-    : section === "sales"
-      ? "sales"
+    : section === "sales" || section === "stock-requests"
+      ? section
       : "pos";
 
   const todaySales = sales.filter((s) => s.branch === effectiveShop && s.date === today);
@@ -303,11 +307,15 @@ function DashboardInner() {
                   {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
                   {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
                   {activeSection === "settings" && <SettingsSection />}
+                  {activeSection === "stock-requests" && <StockRequestSection shop={effectiveShop} />}
+                  {activeSection === "pending-orders" && <PendingOrdersSection shop={effectiveShop} />}
                 </>
-              ) : activeSection === "sales" ? (
-                <SalesSection shop={effectiveShop} isOwner={canManageBranch} />
               ) : (
-                <PosSection shop={effectiveShop} cashier={cashier} />
+                <>
+                  {activeSection === "sales" && <SalesSection shop={effectiveShop} isOwner={canManageBranch} />}
+                  {activeSection === "stock-requests" && <StockRequestSection shop={effectiveShop} />}
+                  {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
+                </>
               )}
             </main>
           </div>
