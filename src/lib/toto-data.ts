@@ -1,17 +1,24 @@
 export type ShopId = "toto" | "sunnozy-1" | "sunnozy-2" | "mimis" | "marc-urembo";
 export type BranchId = ShopId | "all";
+export type BranchType = "store" | "shop";
 
 export const shopIds: ShopId[] = ["toto", "sunnozy-1", "sunnozy-2", "mimis", "marc-urembo"];
 
-export const branches: { id: BranchId; name: string }[] = [
-  { id: "toto", name: "Totoz Empire" },
-  { id: "sunnozy-1", name: "Sunnozy-1" },
-  { id: "sunnozy-2", name: "Sunnozy-2" },
-  { id: "mimis", name: "Mimis" },
-  { id: "marc-urembo", name: "Marc Urembo" },
+export const branches: { id: BranchId; name: string; type: BranchType }[] = [
+  { id: "toto", name: "Totoz Empire", type: "store" },
+  { id: "sunnozy-1", name: "Sunnozy-1", type: "store" },
+  { id: "sunnozy-2", name: "Sunnozy-2", type: "store" },
+  { id: "mimis", name: "Mimis", type: "shop" },
+  { id: "marc-urembo", name: "Marc Urembo", type: "shop" },
 ];
 
 export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
+export const branchType = (id: BranchId) => branches.find((b) => b.id === id)?.type ?? "shop";
+export const isStore = (id: BranchId) => branchType(id) === "store";
+export const isShop = (id: BranchId) => branchType(id) === "shop";
+
+export const storeBranches = branches.filter((b) => b.type === "store");
+export const shopBranches = branches.filter((b) => b.type === "shop");
 
 export const colors = {
   primary: "#5B3A96",
@@ -108,13 +115,17 @@ export type SectionId =
   | "expenses"
   | "staff"
   | "reports"
-  | "settings";
+  | "settings"
+  | "stock-requests"
+  | "pending-orders";
 
 export const navItems: NavItem[] = [
   { id: "overview", label: "Dashboard", ownerOnly: true, icon: "📊" },
   { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
   { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
   { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
+  { id: "stock-requests", label: "Stock Requests", ownerOnly: false, icon: "📦" },
+  { id: "pending-orders", label: "Pending Orders", ownerOnly: true, icon: "⏳" },
   { id: "inventory", label: "Goods", ownerOnly: true, icon: "📦" },
   { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
   { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
