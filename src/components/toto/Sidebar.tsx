@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { navItems, type BranchId, type SectionId, colors, branchLabel, isStore } from "@/lib/toto-data";
+import { navItems, colors, branchLabel, isWarehouse, type BranchId, type SectionId } from "@/lib/toto-data";
 import { AppLogo } from "./AppLogo";
 import { useAuth } from "@/hooks/use-auth";
 import { LogOut } from "lucide-react";
@@ -11,13 +11,13 @@ const iconMap: Record<string, string> = {
   pos: "🛍️",
   sales: "📋",
   returns: "🔄",
-  inventory: "📦",
+  warehouse: "🏪",
+  "stock-requests": "📦",
+  "pending-orders": "⏳",
   expenses: "💰",
   staff: "👥",
   reports: "📈",
   settings: "⚙️",
-  "stock-requests": "📦",
-  "pending-orders": "⏳",
 };
 
 type Props = {
@@ -57,7 +57,7 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
     : navItems.filter(item => !item.ownerOnly || item.id === "stock-requests");
 
   const branchName = branchLabel(shop);
-  const branchIsStore = isStore(shop);
+  const branchIsWarehouse = isWarehouse(shop);
 
   return (
     <aside className="hidden md:flex md:flex-col md:w-[220px] md:min-h-full md:bg-white md:border-r md:border-[#F0EEF4] md:flex-shrink-0">
@@ -83,9 +83,9 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
           <span className="text-sm font-medium truncate" style={{ color: colors.textDark }}>
             {branchName}
           </span>
-          {branchIsStore && (
+          {branchIsWarehouse && (
             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-white/60 text-[#5B3A96] ml-auto">
-              Store
+              Warehouse
             </span>
           )}
         </div>
