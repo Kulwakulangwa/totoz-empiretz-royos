@@ -7,7 +7,7 @@ import { BranchSelectionPage } from "./BranchSelectionPage";
 import { BranchDashboardHeader } from "./BranchDashboardHeader";
 import {
   ExpensesSection,
-  InventorySection,
+  WarehouseSection, // renamed from InventorySection
   OverviewSection,
   PosSection,
   ReportsSection,
@@ -302,7 +302,7 @@ function DashboardInner() {
                   {activeSection === "returns" && (
                     <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={canManageBranch} />
                   )}
-                  {activeSection === "inventory" && <InventorySection shop={effectiveShop} />}
+                  {activeSection === "warehouse" && <WarehouseSection />}
                   {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
                   {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
                   {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
