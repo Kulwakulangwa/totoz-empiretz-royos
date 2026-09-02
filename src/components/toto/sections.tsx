@@ -32,8 +32,7 @@ import {
   getBranchUuid,
   getBranchIdFromUuid,
   branchLabel,
-  isStore,
-  storeBranches,
+  warehouseBranches, // renamed from storeBranches
   type BranchId,
   type Product,
   type ShopId,
@@ -731,7 +730,7 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   );
 }
 
-/* ---------------- Inventory ---------------- */
+/* ---------------- Warehouse ---------------- */
 
 type ProductForm = {
   name: string;
@@ -741,7 +740,7 @@ type ProductForm = {
   buy: string;
   sell: string;
   min: string;
-  stock: Partial<Record<ShopId, string>>;
+  stock: Partial<Record<string, string>>;
   imageFile: File | null;
   removeImage: boolean;
 };
@@ -759,22 +758,22 @@ const emptyProduct: ProductForm = {
   removeImage: false,
 };
 
-const stockLabel = (p: Product, shop?: BranchId) => {
+const stockLabel = (p: Product, shop?: string) => {
   if (shop && shop !== "all") {
     return (p.stock[shop] ?? 0) > 0 ? `${branchLabel(shop)} ${(p.stock[shop] ?? 0)}` : "No stock yet";
   }
 
-  const parts = shopIds
+  const parts = Object.keys(p.stock)
     .filter((id) => (p.stock[id] ?? 0) > 0)
     .map((id) => `${branchLabel(id)} ${p.stock[id]}`);
   return parts.length ? parts.join(" · ") : "No stock yet";
 };
 
-function InventorySection({ shop }: { shop: BranchId }) {
+function WarehouseSection() {
   const { products, addProduct, updateProduct, removeProduct, adjustStock } = useToto();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editingBranch, setEditingBranch] = useState<ShopId | null>(null);
+  const [editingBranch, setEditingBranch] = useState<string | null>(null);
   const [form, setForm] = useState(emptyProduct);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -783,15 +782,14 @@ function InventorySection({ shop }: { shop: BranchId }) {
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [adjust, setAdjust] = useState<{
     sku: string;
-    branch: ShopId;
+    branch: string;
     delta: string;
     reason: string;
   } | null>(null);
 
-  const defaultShop: ShopId = shop === "all" ? "toto" : shop;
-  const rows = shop === "all"
-    ? products
-    : products.filter((p) => Object.prototype.hasOwnProperty.call(p.stock, shop));
+  // Only show products that belong to warehouses
+  const warehouseIds = warehouseBranches.map(b => b.id);
+  const rows = products.filter(p => warehouseIds.includes(p.branch));
 
   useEffect(() => {
     return () => {
@@ -826,7 +824,7 @@ function InventorySection({ shop }: { shop: BranchId }) {
   function openEdit(p: Product) {
     setEditing(p.sku);
     setEditingBranch(p.branch);
-    const stock: Partial<Record<ShopId, string>> = {};
+    const stock: Partial<Record<string, string>> = {};
     const targetShop = p.branch;
     if (p.stock[targetShop] !== undefined) {
       stock[targetShop] = String(p.stock[targetShop]);
@@ -878,10 +876,10 @@ function InventorySection({ shop }: { shop: BranchId }) {
       return;
     }
 
-    const stock: Partial<Record<ShopId, number>> = {};
-    const targetShop = editingBranch || defaultShop;
+    const stock: Partial<Record<string, number>> = {};
+    const targetShop = editingBranch || (warehouseIds[0] ?? "warehouse-1");
     const quantity = Number(form.stock[targetShop]) || 0;
-    if (quantity > 0 || shop !== "all") {
+    if (quantity > 0) {
       stock[targetShop] = quantity;
     }
 
@@ -902,8 +900,8 @@ function InventorySection({ shop }: { shop: BranchId }) {
     let result: SaveResult;
     try {
       result = await (editing
-        ? updateProduct(editing, payload, targetShop)
-        : addProduct(payload, targetShop)
+        ? updateProduct(editing, payload, targetShop as ShopId)
+        : addProduct(payload, targetShop as ShopId)
       );
     } catch (err: any) {
       toast("Product could not be saved", {
@@ -928,8 +926,8 @@ function InventorySection({ shop }: { shop: BranchId }) {
   return (
     <Panel>
       <PanelHead
-        title="Inventory"
-        description="One product identity per shop, with stock tracked for this branch."
+        title="Warehouse"
+        description="Manage stock in all warehouses."
       >
         <button
           className={btn}
@@ -940,7 +938,7 @@ function InventorySection({ shop }: { shop: BranchId }) {
             }
             setAdjust({
               sku: rows[0]?.sku ?? products[0]!.sku,
-              branch: rows[0]?.branch ?? defaultShop,
+              branch: rows[0]?.branch ?? warehouseIds[0],
               delta: "",
               reason: "",
             });
@@ -959,11 +957,11 @@ function InventorySection({ shop }: { shop: BranchId }) {
               <tr>
                 {[
                   "Product",
-                  "Stock by shop",
+                  "Stock by Warehouse",
                   "Barcode",
                   "Buying",
                   "Selling",
-                  shop === "all" ? "Total qty" : `${branchLabel(shop)} qty`,
+                  "Total qty",
                   "Min",
                   "Status",
                   "",
@@ -979,8 +977,8 @@ function InventorySection({ shop }: { shop: BranchId }) {
             </thead>
             <tbody>
               {rows.map((p) => {
-                const qty = stockOf(p, shop);
-                const low = qty <= p.min;
+                const totalQty = Object.values(p.stock).reduce((sum, q) => sum + (q || 0), 0);
+                const low = totalQty <= p.min;
                 return (
                   <tr key={`${p.branch}:${p.sku}`} className="border-b border-border/50 last:border-0">
                     <td className="px-2.5 py-3">
@@ -995,12 +993,12 @@ function InventorySection({ shop }: { shop: BranchId }) {
                       </div>
                     </td>
                     <td className="px-2.5 py-3 text-[12px] text-muted-foreground">
-                      {stockLabel(p, shop)}
+                      {stockLabel(p)}
                     </td>
                     <td className="px-2.5 py-3 font-mono">{p.barcode}</td>
                     <td className="px-2.5 py-3 font-mono">{money(p.buy)}</td>
                     <td className="px-2.5 py-3 font-mono">{money(p.sell)}</td>
-                    <td className="px-2.5 py-3 font-mono">{qty}</td>
+                    <td className="px-2.5 py-3 font-mono">{totalQty}</td>
                     <td className="px-2.5 py-3 font-mono text-muted-foreground">{p.min}</td>
                     <td className="px-2.5 py-3">
                       <Pill tone={low ? "low" : "ok"}>{low ? "Low stock" : "In stock"}</Pill>
@@ -1022,7 +1020,7 @@ function InventorySection({ shop }: { shop: BranchId }) {
                         <button
                           className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
                           onClick={() => {
-                            removeProduct(p.sku, p.branch);
+                            removeProduct(p.sku, p.branch as ShopId);
                             toast("Product removed", { description: p.name });
                           }}
                         >
@@ -1038,8 +1036,8 @@ function InventorySection({ shop }: { shop: BranchId }) {
         </div>
       ) : (
         <EmptyState
-          title="No products yet"
-          copy="Register your products with SKU, barcode, buying and selling price, stock level and minimum stock to start tracking inventory."
+          title="No products in warehouse"
+          copy="Add products to any warehouse to start tracking stock."
         />
       )}
 
@@ -1072,7 +1070,7 @@ function InventorySection({ shop }: { shop: BranchId }) {
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
             <DialogDescription>
-              Leave SKU or barcode blank to generate them automatically. Stock is entered for this branch only.
+              Leave SKU or barcode blank to generate them automatically. Stock is entered for the selected warehouse.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1192,13 +1190,19 @@ function InventorySection({ shop }: { shop: BranchId }) {
           </div>
           <div className="mt-1 grid gap-3">
             <span className="text-[12px] font-medium text-muted-foreground">Stock</span>
-            <Field label={`Stock in ${branchLabel(editingBranch || defaultShop)}`}>
+            <Field label={`Stock in ${branchLabel(editingBranch || (warehouseIds[0] ?? "warehouse-1"))}`}>
               <input
                 className={field}
                 inputMode="numeric"
-                value={form.stock[editingBranch || defaultShop] ?? ""}
+                value={form.stock[editingBranch || (warehouseIds[0] ?? "warehouse-1")] ?? ""}
                 onChange={(e) =>
-                  setForm({ ...form, stock: { ...form.stock, [editingBranch || defaultShop]: e.target.value } })
+                  setForm({
+                    ...form,
+                    stock: {
+                      ...form.stock,
+                      [editingBranch || (warehouseIds[0] ?? "warehouse-1")]: e.target.value,
+                    },
+                  })
                 }
               />
             </Field>
@@ -1246,7 +1250,7 @@ function InventorySection({ shop }: { shop: BranchId }) {
                   value={`${adjust.branch}:${adjust.sku}`}
                   onChange={(e) => {
                     const [branch, sku] = e.target.value.split(":");
-                    setAdjust({ ...adjust, branch: branch as ShopId, sku: sku || "" });
+                    setAdjust({ ...adjust, branch: branch, sku: sku || "" });
                   }}
                 >
                   {rows.map((p) => (
@@ -1256,16 +1260,16 @@ function InventorySection({ shop }: { shop: BranchId }) {
                   ))}
                 </select>
               </Field>
-              <Field label="Shop">
+              <Field label="Warehouse">
                 <select
                   className={field}
                   value={adjust.branch}
-                  onChange={(e) => setAdjust({ ...adjust, branch: e.target.value as ShopId })}
+                  onChange={(e) => setAdjust({ ...adjust, branch: e.target.value })}
                 >
-                  {shopIds.map((id) => (
-                    <option key={id} value={id}>
-                      {branchLabel(id)} (
-                      {products.find((p) => p.sku === adjust.sku && p.branch === id)?.stock[id] ?? 0})
+                  {warehouseBranches.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name} (
+                      {products.find((p) => p.sku === adjust.sku && p.branch === w.id)?.stock[w.id] ?? 0})
                     </option>
                   ))}
                 </select>
@@ -1302,7 +1306,7 @@ function InventorySection({ shop }: { shop: BranchId }) {
                 }
                 adjustStock(
                   adjust.sku,
-                  adjust.branch,
+                  adjust.branch as ShopId,
                   delta,
                   adjust.reason.trim() || "No reason given",
                 );
@@ -2334,21 +2338,21 @@ function StockRequestSection({ shop }: { shop: BranchId }) {
   const targetBranchId = getBranchUuid(shop);
   const requester = user?.email || "Unknown";
   const shopProducts = products.filter(p => stockOf(p, shop) >= 0);
-  const stores = storeBranches;
+  const warehouses = warehouseBranches; // renamed
 
   const addItem = () => {
     if (!selectedProduct) return;
     const product = products.find(p => p.sku === selectedProduct);
     if (!product) return;
 
-    const storeWithStock = stores.find(s => stockOf(product, s.id) > 0);
-    if (!storeWithStock) {
-      toast("This product is not available in any store.");
+    const warehouseWithStock = warehouses.find(w => stockOf(product, w.id) > 0);
+    if (!warehouseWithStock) {
+      toast("This product is not available in any warehouse.");
       return;
     }
 
-    const sourceBranchId = getBranchUuid(storeWithStock.id);
-    const maxAvailable = stockOf(product, storeWithStock.id);
+    const sourceBranchId = getBranchUuid(warehouseWithStock.id);
+    const maxAvailable = stockOf(product, warehouseWithStock.id);
 
     setItems(prev => [
       ...prev,
@@ -2377,11 +2381,11 @@ function StockRequestSection({ shop }: { shop: BranchId }) {
   };
 
   const changeSource = (index: number, sourceBranchId: string) => {
-    const store = stores.find(s => getBranchUuid(s.id) === sourceBranchId);
-    if (!store) return;
+    const warehouse = warehouses.find(w => getBranchUuid(w.id) === sourceBranchId);
+    if (!warehouse) return;
     const product = products.find(p => p.sku === items[index].sku);
     if (!product) return;
-    const maxAvailable = stockOf(product, store.id);
+    const maxAvailable = stockOf(product, warehouse.id);
 
     setItems(prev => {
       const newItems = [...prev];
@@ -2441,7 +2445,7 @@ function StockRequestSection({ shop }: { shop: BranchId }) {
       <Panel>
         <PanelHead
           title="Stock Request"
-          description={`Request stock from stores for ${branchLabel(shop)}`}
+          description={`Request stock from warehouses for ${branchLabel(shop)}`}
         />
         <div className="grid gap-3">
           <div className="flex flex-wrap gap-2">
@@ -2466,7 +2470,7 @@ function StockRequestSection({ shop }: { shop: BranchId }) {
         {items.length > 0 ? (
           <div className="mt-4 space-y-3">
             {items.map((item, index) => {
-              const storeName = branches.find(b => getBranchUuid(b.id) === item.sourceBranchId)?.name || "Unknown";
+              const warehouseName = branches.find(b => getBranchUuid(b.id) === item.sourceBranchId)?.name || "Unknown";
               return (
                 <div
                   key={`${item.sku}-${index}`}
@@ -2477,17 +2481,17 @@ function StockRequestSection({ shop }: { shop: BranchId }) {
                     <div className="text-xs text-muted-foreground">{item.sku}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs">Store:</label>
+                    <label className="text-xs">Warehouse:</label>
                     <select
                       className={cn(field, "w-auto min-w-[120px]")}
                       value={item.sourceBranchId}
                       onChange={(e) => changeSource(index, e.target.value)}
                     >
-                      {stores.map(s => {
-                        const stock = stockOf(products.find(p => p.sku === item.sku)!, s.id);
+                      {warehouses.map(w => {
+                        const stock = stockOf(products.find(p => p.sku === item.sku)!, w.id);
                         return (
-                          <option key={s.id} value={getBranchUuid(s.id)}>
-                            {s.name} ({stock} available)
+                          <option key={w.id} value={getBranchUuid(w.id)}>
+                            {w.name} ({stock} available)
                           </option>
                         );
                       })}
@@ -2655,12 +2659,12 @@ function PendingOrdersSection({ shop }: { shop: BranchId }) {
               const targetName = targetBranch?.name || "Unknown";
               const requester = order.requested_by;
 
-              const itemsByStore: Record<string, typeof order.items> = {};
+              const itemsByWarehouse: Record<string, typeof order.items> = {};
               order.items?.forEach(item => {
-                const store = branches.find(b => getBranchUuid(b.id) === item.source_branch_id);
-                const key = store?.name || item.source_branch_id;
-                if (!itemsByStore[key]) itemsByStore[key] = [];
-                itemsByStore[key].push(item);
+                const warehouse = branches.find(b => getBranchUuid(b.id) === item.source_branch_id);
+                const key = warehouse?.name || item.source_branch_id;
+                if (!itemsByWarehouse[key]) itemsByWarehouse[key] = [];
+                itemsByWarehouse[key].push(item);
               });
 
               return (
@@ -2698,9 +2702,9 @@ function PendingOrdersSection({ shop }: { shop: BranchId }) {
                   </div>
 
                   <div className="mt-3 space-y-2">
-                    {Object.entries(itemsByStore).map(([storeName, items]) => (
-                      <div key={storeName} className="text-sm">
-                        <span className="font-medium">{storeName}</span>
+                    {Object.entries(itemsByWarehouse).map(([warehouseName, items]) => (
+                      <div key={warehouseName} className="text-sm">
+                        <span className="font-medium">{warehouseName}</span>
                         <ul className="list-disc list-inside ml-4 text-muted-foreground">
                           {items?.map((item, i) => (
                             <li key={i}>
@@ -2777,7 +2781,7 @@ function PendingOrdersSection({ shop }: { shop: BranchId }) {
 export {
   OverviewSection,
   PosSection,
-  InventorySection,
+  WarehouseSection, // renamed from InventorySection
   ExpensesSection,
   StaffSection,
   ReportsSection,
