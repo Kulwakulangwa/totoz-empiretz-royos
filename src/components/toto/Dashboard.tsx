@@ -7,7 +7,7 @@ import { BranchSelectionPage } from "./BranchSelectionPage";
 import { BranchDashboardHeader } from "./BranchDashboardHeader";
 import {
   ExpensesSection,
-  WarehouseSection, // renamed from InventorySection
+  WarehouseSection,
   OverviewSection,
   PosSection,
   ReportsSection,
@@ -25,6 +25,8 @@ import {
   stockOf,
   colors,
   getBranchIdFromUuid,
+  isWarehouse,
+  isShop,
   type BranchId,
   type SectionId,
 } from "@/lib/toto-data";
@@ -50,6 +52,7 @@ function DashboardInner() {
   const [showBranchSelector, setShowBranchSelector] = useState(true);
   const [section, setSection] = useState<SectionId>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [hasAutoRedirected, setHasAutoRedirected] = useState(false);
 
   const accessibleBranches = useMemo(() => {
     if (isOwner) return branches;
@@ -138,6 +141,18 @@ function DashboardInner() {
     }
   }, [authLoading, accessibleBranches, isOwner, selectedBranch, showBranchSelector]);
 
+  // Auto-redirect warehouse users to the Warehouse section
+  useEffect(() => {
+    if (selectedBranch && isWarehouse(selectedBranch) && !hasAutoRedirected) {
+      setSection("warehouse");
+      setHasAutoRedirected(true);
+    }
+    // Reset auto-redirect flag when switching to a shop
+    if (selectedBranch && isShop(selectedBranch)) {
+      setHasAutoRedirected(false);
+    }
+  }, [selectedBranch, isWarehouse, isShop, hasAutoRedirected]);
+
   if (!authLoading && accessibleBranches.length === 0) {
     const handleSignOut = async () => {
       const { error } = await signOut();
@@ -175,6 +190,7 @@ function DashboardInner() {
         onSelectBranch={(id) => {
           setSelectedBranch(id);
           setShowBranchSelector(false);
+          setHasAutoRedirected(false);
         }}
         userEmail={user?.email}
         role={role || undefined}
@@ -205,19 +221,17 @@ function DashboardInner() {
 
   const effectiveShop = selectedBranch;
   const data = branches.find((b) => b.id === effectiveShop) || branches[0];
+  const isWarehouseBranch = isWarehouse(effectiveShop);
+  const isShopBranch = isShop(effectiveShop);
 
-  // Build visible nav items based on role
-  // Owners/managers: full nav
-  // Cashiers: POS, Sales, and Stock Requests
-  const visibleNav = canManageBranch
-    ? navItems
-    : navItems.filter(item => item.id === "pos" || item.id === "sales" || item.id === "stock-requests");
-
-  const activeSection: SectionId = canManageBranch
-    ? (section as SectionId)
-    : section === "sales" || section === "stock-requests"
-      ? section
-      : "pos";
+  // For warehouse users, force the active section to be "warehouse"
+  const activeSection: SectionId = isWarehouseBranch
+    ? "warehouse"
+    : canManageBranch
+      ? (section as SectionId)
+      : section === "sales" || section === "stock-requests"
+        ? section
+        : "pos";
 
   const todaySales = sales.filter((s) => s.branch === effectiveShop && s.date === today);
   const todayReturns = returns.filter((r) => r.branch === effectiveShop && r.date === today);
@@ -264,6 +278,7 @@ function DashboardInner() {
     setShowBranchSelector(true);
     setSelectedBranch(null);
     setSection("overview");
+    setHasAutoRedirected(false);
   };
 
   return (
@@ -294,7 +309,19 @@ function DashboardInner() {
             <Sidebar shop={effectiveShop} section={activeSection} isOwner={canManageBranch} onSection={setSection} />
 
             <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
-              {canManageBranch ? (
+              {/* If this is a warehouse branch, only show warehouse-related sections */}
+              {isWarehouseBranch ? (
+                <>
+                  {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
+                  {activeSection === "warehouse" && <WarehouseSection />}
+                  {activeSection === "stock-requests" && <StockRequestSection shop={effectiveShop} />}
+                  {activeSection === "pending-orders" && <PendingOrdersSection shop={effectiveShop} />}
+                  {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
+                  {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
+                  {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
+                  {activeSection === "settings" && <SettingsSection />}
+                </>
+              ) : canManageBranch ? (
                 <>
                   {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
                   {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
@@ -327,25 +354,46 @@ function DashboardInner() {
           {mobileMenuOpen && (
             <div className="mb-2 rounded-2xl border border-[#F0EEF4] bg-white p-2 shadow-[0_-10px_30px_rgba(86,54,130,0.14)]">
               <div className="grid grid-cols-2 gap-2">
-                {visibleNav.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setSection(item.id);
-                      setMobileMenuOpen(false);
-                    }}
-                    className={cn(
-                      "flex min-h-[58px] flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium transition-colors",
-                      activeSection === item.id ? "text-white" : "text-[#8B889A]"
-                    )}
-                    style={{
-                      background: activeSection === item.id ? colors.primary : "#F7F7FA",
-                    }}
-                  >
-                    <span className="mb-0.5 text-base">{item.icon}</span>
-                    <span className="leading-tight text-center">{item.label}</span>
-                  </button>
-                ))}
+                {/* Render only the visible nav items for mobile */}
+                {(() => {
+                  let mobileNav = [];
+                  if (isWarehouseBranch) {
+                    mobileNav = [
+                      { id: "warehouse", label: "Warehouse", ownerOnly: true, icon: "🏪" },
+                      { id: "stock-requests", label: "Stock Requests", ownerOnly: false, icon: "📦" },
+                      { id: "pending-orders", label: "Pending Orders", ownerOnly: true, icon: "⏳" },
+                    ];
+                  } else if (isShopBranch) {
+                    if (isOwner) {
+                      mobileNav = navItems;
+                    } else {
+                      mobileNav = [
+                        { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
+                        { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
+                        { id: "stock-requests", label: "Stock Requests", ownerOnly: false, icon: "📦" },
+                      ];
+                    }
+                  }
+                  return mobileNav.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setSection(item.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={cn(
+                        "flex min-h-[58px] flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium transition-colors",
+                        activeSection === item.id ? "text-white" : "text-[#8B889A]"
+                      )}
+                      style={{
+                        background: activeSection === item.id ? colors.primary : "#F7F7FA",
+                      }}
+                    >
+                      <span className="mb-0.5 text-base">{item.icon}</span>
+                      <span className="leading-tight text-center">{item.label}</span>
+                    </button>
+                  ));
+                })()}
                 {isOwner && (
                   <button
                     onClick={() => {
@@ -371,14 +419,33 @@ function DashboardInner() {
           >
             <div className="flex items-center gap-2">
               <span className="flex size-8 items-center justify-center rounded-full text-base" style={{ background: colors.primary, color: colors.white }}>
-                {visibleNav.find((item) => item.id === activeSection)?.icon || "📱"}
+                {(() => {
+                  let icon = "📱";
+                  if (isWarehouseBranch) {
+                    icon = "🏪";
+                  } else if (activeSection === "pos") {
+                    icon = "🛍️";
+                  } else if (activeSection === "sales") {
+                    icon = "📋";
+                  } else if (activeSection === "stock-requests") {
+                    icon = "📦";
+                  }
+                  return icon;
+                })()}
               </span>
               <div className="text-left leading-tight">
                 <p className="text-[10px] font-medium uppercase tracking-[0.12em]" style={{ color: colors.textMuted }}>
-                  Menu
+                  {isWarehouseBranch ? "Warehouse" : "Shop"}
                 </p>
                 <p className="text-sm font-semibold" style={{ color: colors.textDark }}>
-                  {visibleNav.find((item) => item.id === activeSection)?.label || "Open"}
+                  {isWarehouseBranch ? "Warehouse" : (() => {
+                    let label = "Open";
+                    if (activeSection === "pos") label = "Point of Sale";
+                    else if (activeSection === "sales") label = "Sales";
+                    else if (activeSection === "stock-requests") label = "Stock Requests";
+                    else if (activeSection === "warehouse") label = "Warehouse";
+                    return label;
+                  })()}
                 </p>
               </div>
             </div>
