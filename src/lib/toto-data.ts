@@ -1,23 +1,29 @@
 export type ShopId = "toto" | "sunnozy-1" | "sunnozy-2" | "mimis" | "marc-urembo";
 export type BranchId = ShopId | "all";
-export type BranchType = "store" | "shop";
+export type BranchType = "shop" | "warehouse";
 
 export const shopIds: ShopId[] = ["toto", "sunnozy-1", "sunnozy-2", "mimis", "marc-urembo"];
 
-export const branches: { id: BranchId; name: string; type: BranchType }[] = [
-  { id: "toto", name: "Totoz Empire", type: "store" },
-  { id: "sunnozy-1", name: "Sunnozy-1", type: "store" },
-  { id: "sunnozy-2", name: "Sunnozy-2", type: "store" },
+// All branches: 5 shops + 3 warehouses
+export const branches: { id: BranchId | string; name: string; type: BranchType }[] = [
+  // Shops
+  { id: "toto", name: "Totoz Empire", type: "shop" },
+  { id: "sunnozy-1", name: "Sunnozy-1", type: "shop" },
+  { id: "sunnozy-2", name: "Sunnozy-2", type: "shop" },
   { id: "mimis", name: "Mimis", type: "shop" },
   { id: "marc-urembo", name: "Marc Urembo", type: "shop" },
+  // Warehouses
+  { id: "warehouse-1", name: "Warehouse 1", type: "warehouse" },
+  { id: "warehouse-2", name: "Warehouse 2", type: "warehouse" },
+  { id: "warehouse-3", name: "Warehouse 3", type: "warehouse" },
 ];
 
-export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
-export const branchType = (id: BranchId) => branches.find((b) => b.id === id)?.type ?? "shop";
-export const isStore = (id: BranchId) => branchType(id) === "store";
-export const isShop = (id: BranchId) => branchType(id) === "shop";
+export const branchLabel = (id: string) => branches.find((b) => b.id === id)?.name ?? id;
+export const branchType = (id: string) => branches.find((b) => b.id === id)?.type ?? "shop";
+export const isWarehouse = (id: string) => branchType(id) === "warehouse";
+export const isShop = (id: string) => branchType(id) === "shop";
 
-export const storeBranches = branches.filter((b) => b.type === "store");
+export const warehouseBranches = branches.filter((b) => b.type === "warehouse");
 export const shopBranches = branches.filter((b) => b.type === "shop");
 
 export const colors = {
@@ -62,7 +68,7 @@ export const reports = [
 ];
 
 export type Product = {
-  branch: ShopId;
+  branch: string;           // branch ID (could be shop or warehouse)
   name: string;
   sku: string;
   barcode: string;
@@ -70,7 +76,7 @@ export type Product = {
   buy: number;
   sell: number;
   min: number;
-  stock: Partial<Record<ShopId, number>>;
+  stock: Partial<Record<string, number>>; // stock per branch (shop or warehouse)
   imagePath?: string | null;
   imageUrl?: string | null;
 };
@@ -111,22 +117,22 @@ export type SectionId =
   | "pos"
   | "sales"
   | "returns"
-  | "inventory"
+  | "warehouse"          // renamed from "inventory"
+  | "stock-requests"
+  | "pending-orders"
   | "expenses"
   | "staff"
   | "reports"
-  | "settings"
-  | "stock-requests"
-  | "pending-orders";
+  | "settings";
 
 export const navItems: NavItem[] = [
   { id: "overview", label: "Dashboard", ownerOnly: true, icon: "📊" },
   { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
   { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
   { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
+  { id: "warehouse", label: "Warehouse", ownerOnly: true, icon: "🏪" },
   { id: "stock-requests", label: "Stock Requests", ownerOnly: false, icon: "📦" },
   { id: "pending-orders", label: "Pending Orders", ownerOnly: true, icon: "⏳" },
-  { id: "inventory", label: "Goods", ownerOnly: true, icon: "📦" },
   { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
   { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
   { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
@@ -135,25 +141,30 @@ export const navItems: NavItem[] = [
 
 export const INTERNAL_BARCODE_START = 1000000;
 
-export const stockOf = (product: Product, branch: BranchId): number => {
+export const stockOf = (product: Product, branch: string): number => {
   if (branch === "all") {
-    return shopIds.reduce((sum, id) => sum + (product.stock[id] ?? 0), 0);
+    // Sum stock across all branches (both shops and warehouses)
+    const ids = branches.map(b => b.id);
+    return ids.reduce((sum, id) => sum + (product.stock[id] ?? 0), 0);
   }
   return product.stock[branch] ?? 0;
 };
 
 // ============================================================
-// Correct UUIDs per shop (matching your SQL migration)
+// UUIDs for all branches (shops + warehouses)
 // ============================================================
 export const BRANCH_UUID_MAP: Record<string, string> = {
+  // Shops
   toto: "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
   "totoz-empire": "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
-  main: "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
-  "main-branch": "6d3c2fe8-1af6-4d5d-96eb-9f383c8b9d0a",
   "sunnozy-1": "a8d51c6d-7660-492d-8430-2243d48a59ef",
   "sunnozy-2": "d7280d3d-a2fd-41db-bd9d-c03d371d3d4d",
   mimis: "7f624cb1-f0d1-47d3-bcd5-a9ad3ecdfb92",
   "marc-urembo": "21967b1d-14d2-4d06-9d93-07bc7a2b153b",
+  // Warehouses
+  "warehouse-1": "33333333-3333-3333-3333-333333333331",
+  "warehouse-2": "33333333-3333-3333-3333-333333333332",
+  "warehouse-3": "33333333-3333-3333-3333-333333333333",
 };
 
 const looksLikeUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -172,23 +183,23 @@ export function getBranchUuid(branchId: string): string {
   return BRANCH_UUID_MAP[normalized] || BRANCH_UUID_MAP["toto"] || normalized;
 }
 
-export function getBranchIdFromUuid(uuid: string): ShopId {
+export function getBranchIdFromUuid(uuid: string): string {
   if (!uuid) return "toto";
   const normalized = String(uuid).trim();
 
   if (normalized && !looksLikeUuid(normalized)) {
     const direct = Object.entries(BRANCH_UUID_MAP).find(([key]) => key.toLowerCase() === normalized.toLowerCase());
-    if (direct && shopIds.includes(direct[0] as ShopId)) return direct[0] as ShopId;
+    if (direct && branches.some(b => b.id === direct[0])) return direct[0];
     return "toto";
   }
 
   const match = Object.entries(BRANCH_UUID_MAP).find(([, value]) => value.toLowerCase() === normalized.toLowerCase());
-  if (match && shopIds.includes(match[0] as ShopId)) {
-    return match[0] as ShopId;
+  if (match && branches.some(b => b.id === match[0])) {
+    return match[0];
   }
 
   const byName = branches.find((branch) => getBranchUuid(branch.id) === normalized);
-  if (byName) return byName.id as ShopId;
+  if (byName) return byName.id as string;
 
   return "toto";
 }
@@ -207,7 +218,7 @@ export function getBranchNameFromUuid(uuid: string): string {
   return "Unknown";
 }
 
-export function getBranchIdFromName(name: string): ShopId {
+export function getBranchIdFromName(name: string): string {
   const branch = branches.find((b) => b.name.toLowerCase() === name.toLowerCase());
   return branch?.id || "toto";
 }
