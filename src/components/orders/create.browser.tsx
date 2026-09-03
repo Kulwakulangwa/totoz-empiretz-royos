@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabaseClient } from '@/integrations/supabase/client.client';
+import { supabaseClient } from '@/integrations/supabase/client.browser';
 import { useServerFn } from '@tanstack/react-start';
 import { createOrder } from '@/lib/orders.functions';
 
