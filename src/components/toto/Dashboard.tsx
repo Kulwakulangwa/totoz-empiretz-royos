@@ -18,7 +18,7 @@ import {
   StockRequestSection,
   PendingOrdersSection,
 } from "@/components/toto/sections";
-import CreateOrderPage from '@/routes/orders/create';
+import CreateOrderPage from '@/routes/orders/create.client';
 import {
   branches,
   money,

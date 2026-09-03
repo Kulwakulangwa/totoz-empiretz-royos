@@ -13,6 +13,7 @@ export default function CreateOrderPage() {
   const [selectedShop, setSelectedShop] = useState<string | null>(null);
   const [lines, setLines] = useState<Array<{ productId: string; allocations: Array<{ source: string; qty: number }> }>>([]);
   const [status, setStatus] = useState<string | null>(null);
+
   const createOrderFn = useServerFn(createOrder);
 
   useEffect(() => {
