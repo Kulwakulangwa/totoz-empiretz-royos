@@ -18,7 +18,7 @@ import {
   StockRequestSection,
   PendingOrdersSection,
 } from "@/components/toto/sections";
-import CreateOrderPage from '@/routes/orders/create.client';
+import CreateOrderLoader from '@/components/toto/CreateOrderLoader';
 import {
   branches,
   money,
@@ -337,14 +337,14 @@ function DashboardInner() {
                   {activeSection === "settings" && <SettingsSection />}
                   {activeSection === "stock-requests" && <StockRequestSection shop={effectiveShop} />}
                   {activeSection === "pending-orders" && <PendingOrdersSection shop={effectiveShop} />}
-                  {activeSection === "create-order" && <CreateOrderPage />}
+                  {activeSection === "create-order" && <CreateOrderLoader />}
                 </>
               ) : (
                 <>
                   {activeSection === "sales" && <SalesSection shop={effectiveShop} isOwner={canManageBranch} />}
                   {activeSection === "stock-requests" && <StockRequestSection shop={effectiveShop} />}
                   {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-                  {activeSection === "create-order" && <CreateOrderPage />}
+                  {activeSection === "create-order" && <CreateOrderLoader />}
                 </>
               )}
             </main>
