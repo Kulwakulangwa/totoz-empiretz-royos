@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabaseClient } from '@/integrations/supabase/client.client';
+import { useServerFn } from '@tanstack/react-start';
+import { createOrder } from '@/lib/orders.functions';
 
 type Product = { product_id: string; sku?: string; product_name: string };
 type Location = { location_id: string; location_name: string; location_type: string };
@@ -11,6 +13,7 @@ export default function CreateOrderPage() {
   const [selectedShop, setSelectedShop] = useState<string | null>(null);
   const [lines, setLines] = useState<Array<{ productId: string; allocations: Array<{ source: string; qty: number }> }>>([]);
   const [status, setStatus] = useState<string | null>(null);
+  const createOrderFn = useServerFn(createOrder);
 
   useEffect(() => {
     // load products and locations
@@ -65,10 +68,8 @@ export default function CreateOrderPage() {
 
     setStatus('Placing order...');
     try {
-      // created_by left null for server-side to infer; adjust as needed
-      const { data, error } = await supabaseClient.rpc('rpc_reserve_order', { shop_id: selectedShop, created_by: null, items: items });
-      if (error) throw error;
-      setStatus('Order placed successfully');
+      await createOrderFn({ data: { shop_id: selectedShop, items } });
+      setStatus('Order placed successfully (reserved)');
       // show returned rows or reset
       setLines([]);
     } catch (err: any) {
