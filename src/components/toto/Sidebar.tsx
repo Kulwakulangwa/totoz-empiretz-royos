@@ -81,13 +81,17 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   } else if (isShopBranch) {
     // Shop users: shop-relevant items (including POS, Sales, Returns)
     if (isOwner) {
-      visibleNav = navItems;
+      visibleNav = [
+        ...navItems,
+        { id: "create-order", label: "Create Order", ownerOnly: false, icon: "📤" },
+      ];
     } else {
       visibleNav = [
         { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
         { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
         { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
         { id: "stock-requests", label: "Stock Requests", ownerOnly: false, icon: "📦" },
+        { id: "create-order", label: "Create Order", ownerOnly: false, icon: "📤" },
       ];
     }
   } else {
