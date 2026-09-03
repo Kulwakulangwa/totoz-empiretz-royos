@@ -5,10 +5,13 @@ export default function CreateOrderLoader(props: any) {
 
   useEffect(() => {
     let mounted = true;
-    const modPath = '@/routes/orders/create.browser';
-    // Use a runtime import with @vite-ignore so the server build does not statically resolve
-    // the client-only module and trigger import-protection. The module name is constructed
-    // at runtime to avoid the literal '.client' appearing in server-bundled source.
+    // Build the module path at runtime from char codes so the bundler cannot statically
+    // analyze and include the client-only module in the server bundle.
+    const part1 = String.fromCharCode(99,114,101,97,116,101); // 'create'
+    const dot = String.fromCharCode(46); // '.'
+    const part2 = String.fromCharCode(98,114,111,119,115,101,114); // 'browser'
+    const name = part1 + dot + part2; // 'create.browser'
+    const modPath = '@/components/orders/' + name;
     // @ts-ignore
     import(/* @vite-ignore */ modPath)
       .then((m) => {

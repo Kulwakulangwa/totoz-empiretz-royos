@@ -17,7 +17,6 @@ export default function CreateOrderPage() {
   const createOrderFn = useServerFn(createOrder);
 
   useEffect(() => {
-    // load products and locations
     (async () => {
       const { data: prods } = await supabaseClient.from('products').select('id, sku, name');
       setProducts((prods ?? []).map((p: any) => ({ product_id: p.id, sku: p.sku, product_name: p.name })));
@@ -38,7 +37,6 @@ export default function CreateOrderPage() {
 
   async function addLine(productId: string) {
     const availability = await lookupAvailability(productId);
-    // create allocation entries for warehouses with available > 0
     const allocations = (availability as any[])
       .filter((a) => a.location_type === 'warehouse' && a.available > 0)
       .map((a) => ({ source: a.location_id, qty: 0 }));
@@ -71,7 +69,6 @@ export default function CreateOrderPage() {
     try {
       await createOrderFn({ data: { shop_id: selectedShop, items } });
       setStatus('Order placed successfully (reserved)');
-      // show returned rows or reset
       setLines([]);
     } catch (err: any) {
       console.error(err);
