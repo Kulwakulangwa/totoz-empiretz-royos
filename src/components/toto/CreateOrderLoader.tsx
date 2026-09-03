@@ -5,7 +5,11 @@ export default function CreateOrderLoader(props: any) {
 
   useEffect(() => {
     let mounted = true;
-    import('@/routes/orders/create.client')
+    const modPath = '@/routes/orders/' + 'create.client';
+    // Use a runtime import with @vite-ignore so the server build does not statically resolve
+    // the client-only module and trigger import-protection.
+    // @ts-ignore
+    import(/* @vite-ignore */ modPath)
       .then((m) => {
         if (mounted && m && m.default) setComp(() => m.default as ComponentType<any>);
       })
