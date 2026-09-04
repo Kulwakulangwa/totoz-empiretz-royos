@@ -20,14 +20,21 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 
 type View = "overview" | "inventory" | "receive" | "orders" | "settings";
+
+// UPDATED TYPE: Uses the new view's flat structure
 type ServedAllocation = {
-  id: string;
+  allocation_id: string;
+  warehouse_id: string;
+  order_id: string;
+  order_number: string;
+  status: "completed" | "reversed";
+  created_at: string;
+  destination_shop_name: string;
+  created_by_name: string;
+  product_name: string;
   quantity: number;
-  stock_order_items?: {
-    stock_orders?: { order_number: string; status: "completed" | "reversed" };
-    catalog_products?: { name: string };
-  };
 };
+
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Please try again.";
 type Props = {
@@ -65,19 +72,18 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         loadWarehouseInventory(warehouse.id),
         loadCatalog(),
         loadWarehouseReceipts(warehouse.id),
+        // UPDATED QUERY: Fetch from the new view
         supabase
-          .from("stock_allocations")
-          .select(
-            `id,order_item_id,warehouse_id,quantity,stock_order_items(*, catalog_products(*), stock_orders(*))`,
-          )
+          .from("warehouse_order_view")
+          .select("*")
           .eq("warehouse_id", warehouse.id)
-          .order("id", { ascending: false }),
+          .order("created_at", { ascending: false }),
       ]);
       setInventory(balances);
       setCatalog(products);
       setReceipts(receiptRows);
       if (allocations.error) throw allocations.error;
-      setServed((allocations.data ?? []) as unknown as ServedAllocation[]);
+      setServed((allocations.data ?? []) as ServedAllocation[]);
     } catch (error: unknown) {
       toast("Could not load warehouse", { description: errorMessage(error) });
     } finally {
@@ -94,12 +100,12 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
       units: inventory.reduce((sum, row) => sum + row.quantity, 0),
       skus: inventory.filter((row) => row.quantity > 0).length,
       low: inventory.filter((row) => row.quantity <= row.min_stock).length,
-      served: served.filter((row) => row.stock_order_items?.stock_orders?.status === "completed")
-        .length,
+      served: served.filter((row) => row.status === "completed").length,
     }),
     [inventory, served],
   );
 
+  // ... (Keep submitReceipt, correctStock, and nav exactly the same as before) ...
   const submitReceipt = async () => {
     const qty = Number(quantity);
     const unitCost = Number(cost);
@@ -189,6 +195,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
 
   return (
     <div className="min-h-screen bg-slate-950 p-3 text-slate-900 md:p-6">
+      {/* ... (Keep header and sidebar exactly the same as before) ... */}
       <div className="mx-auto flex min-h-[92vh] max-w-[1440px] flex-col overflow-hidden rounded-3xl bg-slate-100 shadow-2xl">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-5 py-4 text-white">
           <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-300">
@@ -409,26 +416,29 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                       description="Allocations fulfilled from this warehouse."
                     />
                     <div className="grid gap-3">
+                      {/* UPDATED UI RENDERING: Shows Shop Name and Creator */}
                       {served.map((row) => (
                         <div
-                          key={row.id}
+                          key={row.allocation_id}
                           className="flex flex-wrap justify-between gap-3 rounded-xl border bg-white p-4"
                         >
                           <div>
-                            <strong>{row.stock_order_items?.stock_orders?.order_number}</strong>
-                            <p className="text-xs text-slate-500">
-                              {row.stock_order_items?.catalog_products?.name}
+                            <strong>{row.order_number}</strong>
+                            <p className="text-xs text-slate-500">{row.product_name}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Requested by <span className="font-semibold text-slate-700">{row.created_by_name}</span> for{" "}
+                              <span className="font-semibold text-slate-700">{row.destination_shop_name}</span>
                             </p>
                           </div>
                           <div className="text-right">
                             <Pill
                               tone={
-                                row.stock_order_items?.stock_orders?.status === "completed"
+                                row.status === "completed"
                                   ? "ok"
                                   : "neutral"
                               }
                             >
-                              {row.stock_order_items?.stock_orders?.status}
+                              {row.status}
                             </Pill>
                             <p className="mt-1 text-sm font-semibold">{row.quantity} units</p>
                           </div>
