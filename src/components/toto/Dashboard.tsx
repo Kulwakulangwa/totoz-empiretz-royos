@@ -219,16 +219,21 @@ function DashboardInner() {
 
   const effectiveShop = selectedBranch;
   const data = locations.find((b) => b.id === effectiveShop) ?? accessibleBranches[0]!;
+  
+  // FIXED: Added "stocking" for cashiers
   const visibleNav = canManageBranch
     ? navItems
     : [
         { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
         { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
+        { id: "stocking", label: "Stock Requests", ownerOnly: false, icon: "🚚" },
       ];
+      
+  // FIXED: Allow cashiers to select and stay on the stocking page
   const activeSection: SectionId = canManageBranch
     ? (section as SectionId)
-    : section === "sales"
-      ? "sales"
+    : section === "sales" || section === "stocking"
+      ? section
       : "pos";
 
   const todaySales = sales.filter((s) => s.branch === effectiveShop && s.date === today);
@@ -324,6 +329,9 @@ function DashboardInner() {
                 </>
               ) : activeSection === "sales" ? (
                 <SalesSection shop={effectiveShop} isOwner={canManageBranch} />
+              ) : activeSection === "stocking" ? (
+                // FIXED: Allow cashiers to see the stocking page
+                <StockingSection shopId={effectiveShop} shopName={data.name} />
               ) : (
                 <PosSection shop={effectiveShop} cashier={cashier} />
               )}
