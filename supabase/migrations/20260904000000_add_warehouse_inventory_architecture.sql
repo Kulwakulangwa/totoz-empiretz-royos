@@ -114,6 +114,100 @@ create table if not exists public.stock_orders (
   reversal_reason text
 );
 
+-- CREATE TABLE IF NOT EXISTS does not reconcile an older stock_orders table
+-- with this schema. Upgrade legacy/partially-created tables before any
+-- functions or policies refer to the new columns.
+alter table public.stock_orders
+  add column if not exists order_number text,
+  add column if not exists destination_shop_id uuid references public.branches(id),
+  add column if not exists idempotency_key uuid,
+  add column if not exists status public.stock_order_status default 'completed',
+  add column if not exists created_by uuid references auth.users(id),
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists completed_at timestamptz default now(),
+  add column if not exists reversed_by uuid references auth.users(id),
+  add column if not exists reversed_at timestamptz,
+  add column if not exists reversal_reason text;
+
+-- Preserve legacy data when an earlier stock-order implementation used a
+-- different name for the destination branch column.
+do $$
+declare
+  source_column text;
+begin
+  foreach source_column in array array['destination_branch_id', 'shop_branch_id', 'shop_id', 'branch_id']
+  loop
+    if exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'stock_orders'
+        and column_name = source_column
+    ) then
+      execute format(
+        'update public.stock_orders o
+         set destination_shop_id = nullif(o.%1$I::text, '''')::uuid
+         where o.destination_shop_id is null
+           and o.%1$I is not null
+           and o.%1$I::text ~* ''^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$''
+           and exists (select 1 from public.branches b where b.id = o.%1$I::text::uuid)',
+        source_column
+      );
+    end if;
+  end loop;
+end $$;
+
+update public.stock_orders
+set order_number = 'LEGACY-STK-' || upper(substr(md5(id::text), 1, 12))
+where order_number is null or btrim(order_number) = '';
+
+update public.stock_orders
+set idempotency_key = gen_random_uuid()
+where idempotency_key is null;
+
+update public.stock_orders
+set status = 'completed'
+where status is null;
+
+update public.stock_orders
+set created_at = now()
+where created_at is null;
+
+update public.stock_orders
+set completed_at = coalesce(created_at, now())
+where completed_at is null;
+
+alter table public.stock_orders
+  alter column order_number set not null,
+  alter column idempotency_key set not null,
+  alter column idempotency_key set default gen_random_uuid(),
+  alter column status set not null,
+  alter column status set default 'completed',
+  alter column created_at set not null,
+  alter column created_at set default now(),
+  alter column completed_at set not null,
+  alter column completed_at set default now();
+
+create unique index if not exists stock_orders_order_number_uidx
+  on public.stock_orders(order_number);
+create unique index if not exists stock_orders_idempotency_key_uidx
+  on public.stock_orders(idempotency_key);
+
+-- NOT VALID permits unresolved historical rows to remain visible to owners,
+-- while PostgreSQL still enforces a destination on every new row.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.stock_orders'::regclass
+      and conname = 'stock_orders_destination_shop_required'
+  ) then
+    alter table public.stock_orders
+      add constraint stock_orders_destination_shop_required
+      check (destination_shop_id is not null) not valid;
+  end if;
+end $$;
+
 create table if not exists public.stock_order_items (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.stock_orders(id),
@@ -573,6 +667,19 @@ using (
 );
 create policy "Owners create locations" on public.branches for insert to authenticated with check (public.is_owner());
 create policy "Owners update locations" on public.branches for update to authenticated using (public.is_owner()) with check (public.is_owner());
+
+drop policy if exists "Staff read catalog" on public.catalog_products;
+drop policy if exists "Owners manage catalog" on public.catalog_products;
+drop policy if exists "Owners read all balances" on public.inventory_balances;
+drop policy if exists "Shop staff read shop balances" on public.inventory_balances;
+drop policy if exists "Owners read movements" on public.inventory_movements;
+drop policy if exists "Managers read shop movements" on public.inventory_movements;
+drop policy if exists "Owners read receipts" on public.warehouse_receipts;
+drop policy if exists "Owners read receipt items" on public.warehouse_receipt_items;
+drop policy if exists "Authorized staff read shop orders" on public.stock_orders;
+drop policy if exists "Authorized staff read order items" on public.stock_order_items;
+drop policy if exists "Authorized staff read allocations" on public.stock_allocations;
+
 create policy "Staff read catalog" on public.catalog_products for select to authenticated using (true);
 create policy "Owners manage catalog" on public.catalog_products for all to authenticated using (public.is_owner()) with check (public.is_owner());
 create policy "Owners read all balances" on public.inventory_balances for select to authenticated using (public.is_owner());
