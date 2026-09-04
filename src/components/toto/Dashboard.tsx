@@ -9,7 +9,7 @@ import { StockingSection } from "./StockingSection";
 import { WarehouseDashboard } from "./WarehouseDashboard";
 import {
   ExpensesSection,
-  WarehouseSection,
+  InventorySection,
   OverviewSection,
   PosSection,
   ReportsSection,
@@ -17,11 +17,15 @@ import {
   SalesSection,
   SettingsSection,
   StaffSection,
-  StockRequestSection,
-  PendingOrdersSection,
 } from "@/components/toto/sections";
-import CreateOrderLoader from "@/components/toto/CreateOrderLoader";
-import { money, navItems, stockOf, colors, type BranchId, type SectionId } from "@/lib/toto-data";
+import {
+  money,
+  navItems,
+  stockOf,
+  colors,
+  type BranchId,
+  type SectionId,
+} from "@/lib/toto-data";
 import { useLocations, type Location } from "@/lib/inventory";
 import { TotoStoreProvider, useToto } from "@/lib/toto-store";
 import { useAuth } from "@/hooks/use-auth";
@@ -47,7 +51,6 @@ function DashboardInner() {
   const [showBranchSelector, setShowBranchSelector] = useState(true);
   const [section, setSection] = useState<SectionId>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [hasAutoRedirected, setHasAutoRedirected] = useState(false);
 
   const accessibleBranches = useMemo(() => {
     const shops = locations.filter((location) => location.location_type === "shop");
@@ -68,14 +71,11 @@ function DashboardInner() {
 
   // Per‑branch metrics (today)
   const today = new Date().toISOString().slice(0, 10);
-  const salesByBranch: Record<
-    BranchId,
-    { revenue: number; cost: number; vat: number; count: number }
-  > = {};
-  accessibleBranches.forEach((b) => {
+  const salesByBranch: Record<BranchId, { revenue: number; cost: number; vat: number; count: number }> = {};
+  accessibleBranches.forEach(b => {
     salesByBranch[b.id] = { revenue: 0, cost: 0, vat: 0, count: 0 };
   });
-  sales.forEach((s) => {
+  sales.forEach(s => {
     const branchId = s.branch;
     if (branchId && s.date === today && salesByBranch[branchId]) {
       salesByBranch[branchId].revenue += s.total || 0;
@@ -85,10 +85,10 @@ function DashboardInner() {
     }
   });
   const expensesByBranch: Record<BranchId, number> = {};
-  accessibleBranches.forEach((b) => {
+  accessibleBranches.forEach(b => {
     expensesByBranch[b.id] = 0;
   });
-  expenses.forEach((e) => {
+  expenses.forEach(e => {
     const branchId = e.branch;
     if (branchId && e.date === today && expensesByBranch[branchId] !== undefined) {
       expensesByBranch[branchId] += e.amount || 0;
@@ -144,10 +144,7 @@ function DashboardInner() {
   if (authLoading || storeLoading || locationsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div
-          className="animate-spin rounded-full h-12 w-12 border-b-2"
-          style={{ borderColor: colors.primary }}
-        />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: colors.primary }} />
       </div>
     );
   }
@@ -191,7 +188,6 @@ function DashboardInner() {
           setSelectedLocation(location);
           setSelectedBranch(location.location_type === "shop" ? location.id : null);
           setShowBranchSelector(false);
-          setHasAutoRedirected(false);
         }}
         onCreateLocation={createLocation}
         onArchiveLocation={async (location) => updateLocation(location.id, { is_active: false })}
@@ -211,21 +207,9 @@ function DashboardInner() {
   }
 
   if (isOwner && selectedLocation?.location_type === "warehouse") {
-    return (
-      <WarehouseDashboard
-        warehouse={selectedLocation}
-        onBack={() => {
-          setShowBranchSelector(true);
-          setSelectedLocation(null);
-          setSection("overview");
-        }}
-        onLogout={() => {
-          signOut();
-          navigate({ to: "/auth" });
-        }}
-        onArchive={() => updateLocation(selectedLocation.id, { is_active: false })}
-      />
-    );
+    return <WarehouseDashboard warehouse={selectedLocation} onBack={() => { setShowBranchSelector(true); setSelectedLocation(null); setSection("overview"); }}
+      onLogout={() => { signOut(); navigate({ to: "/auth" }); }}
+      onArchive={() => updateLocation(selectedLocation.id, { is_active: false })} />;
   }
 
   if (!selectedBranch) {
@@ -262,27 +246,9 @@ function DashboardInner() {
   const lowStock = products.filter((p) => stockOf(p, effectiveShop) <= p.min);
 
   const metrics = [
-    {
-      label: "Sales",
-      value: money(salesTotal),
-      icon: "📈",
-      bg: colors.pinkBg,
-      color: colors.secondary,
-    },
-    {
-      label: "Expenses",
-      value: money(expenseTotal),
-      icon: "💳",
-      bg: colors.lavenderLight,
-      color: colors.primary,
-    },
-    {
-      label: "Profit",
-      value: money(salesTotal - salesCost - expenseTotal),
-      icon: "💎",
-      bg: colors.tealLight,
-      color: colors.accent,
-    },
+    { label: "Sales", value: money(salesTotal), icon: "📈", bg: colors.pinkBg, color: colors.secondary },
+    { label: "Expenses", value: money(expenseTotal), icon: "💳", bg: colors.lavenderLight, color: colors.primary },
+    { label: "Profit", value: money(salesTotal - salesCost - expenseTotal), icon: "💎", bg: colors.tealLight, color: colors.accent },
     { label: "VAT", value: money(vatTotal), icon: "🧾", bg: "#FCE8E8", color: "#E93FA0" },
   ];
 
@@ -293,7 +259,9 @@ function DashboardInner() {
     }
     const header = "receipt,date,branch,cashier,payment,total,vat\n";
     const body = sales
-      .map((s) => [s.receipt, s.date, s.branch, s.cashier, s.payment, s.total, s.vat].join(","))
+      .map((s) =>
+        [s.receipt, s.date, s.branch, s.cashier, s.payment, s.total, s.vat].join(","),
+      )
       .join("\n");
     const url = URL.createObjectURL(new Blob([header + body], { type: "text/csv" }));
     const a = document.createElement("a");
@@ -309,16 +277,10 @@ function DashboardInner() {
     setSelectedBranch(null);
     setSelectedLocation(null);
     setSection("overview");
-    setHasAutoRedirected(false);
   };
 
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)`,
-      }}
-    >
+    <div className="min-h-screen" style={{ background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)` }}>
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-10 right-20 w-32 h-32 rounded-full bg-white/10" />
         <div className="absolute top-40 right-60 w-16 h-16 rounded-full bg-white/5" />
@@ -342,74 +304,28 @@ function DashboardInner() {
           />
 
           <div className="flex flex-1 overflow-hidden">
-            <Sidebar
-              shop={effectiveShop}
-              section={activeSection}
-              isOwner={canManageBranch}
-              onSection={setSection}
-            />
+            <Sidebar shop={effectiveShop} section={activeSection} isOwner={canManageBranch} onSection={setSection} />
 
-            <main
-              className="flex-1 overflow-y-auto px-6 py-6 pb-28"
-              style={{ background: colors.offWhite }}
-            >
-              {/* If this is a warehouse branch, only show warehouse-related sections */}
-              {isWarehouseBranch ? (
-                <>
-                  {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
-                  {activeSection === "warehouse" && <WarehouseSection />}
-                  {activeSection === "stock-requests" && (
-                    <StockRequestSection shop={effectiveShop} />
-                  )}
-                  {activeSection === "pending-orders" && (
-                    <PendingOrdersSection shop={effectiveShop} />
-                  )}
-                  {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
-                  {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
-                  {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
-                  {activeSection === "settings" && <SettingsSection />}
-                </>
-              ) : canManageBranch ? (
+            <main className="flex-1 overflow-y-auto px-6 py-6 pb-28" style={{ background: colors.offWhite }}>
+              {canManageBranch ? (
                 <>
                   {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
                   {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-                  {activeSection === "sales" && (
-                    <SalesSection shop={effectiveShop} isOwner={canManageBranch} />
-                  )}
+                  {activeSection === "sales" && <SalesSection shop={effectiveShop} isOwner={canManageBranch} />}
                   {activeSection === "returns" && (
-                    <ReturnsSection
-                      shop={effectiveShop}
-                      cashier={cashier}
-                      isOwner={canManageBranch}
-                    />
+                    <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={canManageBranch} />
                   )}
                   {activeSection === "inventory" && <InventorySection shop={effectiveShop} />}
-                  {activeSection === "stocking" && (
-                    <StockingSection shopId={effectiveShop} shopName={data.name} />
-                  )}
+                  {activeSection === "stocking" && <StockingSection shopId={effectiveShop} shopName={data.name} />}
                   {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
                   {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
                   {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
                   {activeSection === "settings" && <SettingsSection />}
-                  {activeSection === "stock-requests" && (
-                    <StockRequestSection shop={effectiveShop} />
-                  )}
-                  {activeSection === "pending-orders" && (
-                    <PendingOrdersSection shop={effectiveShop} />
-                  )}
-                  {activeSection === "create-order" && <CreateOrderLoader />}
                 </>
+              ) : activeSection === "sales" ? (
+                <SalesSection shop={effectiveShop} isOwner={canManageBranch} />
               ) : (
-                <>
-                  {activeSection === "sales" && (
-                    <SalesSection shop={effectiveShop} isOwner={canManageBranch} />
-                  )}
-                  {activeSection === "stock-requests" && (
-                    <StockRequestSection shop={effectiveShop} />
-                  )}
-                  {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
-                  {activeSection === "create-order" && <CreateOrderLoader />}
-                </>
+                <PosSection shop={effectiveShop} cashier={cashier} />
               )}
             </main>
           </div>
@@ -430,7 +346,7 @@ function DashboardInner() {
                     }}
                     className={cn(
                       "flex min-h-[58px] flex-col items-center justify-center rounded-xl px-2 text-[10px] font-medium transition-colors",
-                      activeSection === item.id ? "text-white" : "text-[#8B889A]",
+                      activeSection === item.id ? "text-white" : "text-[#8B889A]"
                     )}
                     style={{
                       background: activeSection === item.id ? colors.primary : "#F7F7FA",
@@ -464,48 +380,19 @@ function DashboardInner() {
             style={{ boxShadow: "0 12px 28px rgba(88, 62, 162, 0.16)" }}
           >
             <div className="flex items-center gap-2">
-              <span
-                className="flex size-8 items-center justify-center rounded-full text-base"
-                style={{ background: colors.primary, color: colors.white }}
-              >
-                {(() => {
-                  let icon = "📱";
-                  if (isWarehouseBranch) {
-                    icon = "🏪";
-                  } else if (activeSection === "pos") {
-                    icon = "🛍️";
-                  } else if (activeSection === "sales") {
-                    icon = "📋";
-                  } else if (activeSection === "stock-requests") {
-                    icon = "📦";
-                  }
-                  return icon;
-                })()}
+              <span className="flex size-8 items-center justify-center rounded-full text-base" style={{ background: colors.primary, color: colors.white }}>
+                {visibleNav.find((item) => item.id === activeSection)?.icon || "📱"}
               </span>
               <div className="text-left leading-tight">
-                <p
-                  className="text-[10px] font-medium uppercase tracking-[0.12em]"
-                  style={{ color: colors.textMuted }}
-                >
-                  {isWarehouseBranch ? "Warehouse" : "Shop"}
+                <p className="text-[10px] font-medium uppercase tracking-[0.12em]" style={{ color: colors.textMuted }}>
+                  Menu
                 </p>
                 <p className="text-sm font-semibold" style={{ color: colors.textDark }}>
-                  {isWarehouseBranch
-                    ? "Warehouse"
-                    : (() => {
-                        let label = "Open";
-                        if (activeSection === "pos") label = "Point of Sale";
-                        else if (activeSection === "sales") label = "Sales";
-                        else if (activeSection === "stock-requests") label = "Stock Requests";
-                        else if (activeSection === "warehouse") label = "Warehouse";
-                        return label;
-                      })()}
+                  {visibleNav.find((item) => item.id === activeSection)?.label || "Open"}
                 </p>
               </div>
             </div>
-            <span className="text-xl" style={{ color: colors.primary }}>
-              {mobileMenuOpen ? "⌃" : "⌄"}
-            </span>
+            <span className="text-xl" style={{ color: colors.primary }}>{mobileMenuOpen ? "⌃" : "⌄"}</span>
           </button>
         </div>
       </nav>

@@ -1,5 +1,6 @@
 export type ShopId = string;
 export type BranchId = string;
+export type BranchType = "shop" | "warehouse";
 
 export const shopIds: ShopId[] = ["toto", "sunnozy-1", "sunnozy-2", "mimis", "marc-urembo"];
 

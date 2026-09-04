@@ -28,16 +28,12 @@ import {
   shopIds,
   stockOf,
   colors,
-  getBranchUuid,
-  getBranchIdFromUuid,
-  branchLabel,
-  warehouseBranches, // renamed from storeBranches
   type BranchId,
   type Product,
   type ShopId,
 } from "@/lib/toto-data";
-import { useToto, type SaleLine, type SaveResult, type StockOrder } from "@/lib/toto-store";
-import { Camera, ImageIcon, Scan, QrCode, Upload, X, Check, RefreshCw } from "lucide-react";
+import { branchLabel, useToto, type SaleLine, type SaveResult } from "@/lib/toto-store";
+import { Camera, ImageIcon, Scan, QrCode, Upload, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 export const btn =
@@ -48,11 +44,9 @@ export const btnPrimary =
 const field =
   "min-h-9 w-full rounded-md border border-border bg-card px-3 text-[13px] outline-none focus:border-ring focus:ring-2 focus:ring-ring/20";
 
+
 const normalizeBarcodeToken = (value: string) =>
-  value
-    .trim()
-    .replace(/[\s_-]+/g, "")
-    .toUpperCase();
+  value.trim().replace(/[\s_-]+/g, "").toUpperCase();
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -90,16 +84,14 @@ function ProductThumb({
 
 /* ---------------- Overview ---------------- */
 
-function OverviewSection({ shop }: { shop: BranchId }) {
+export function OverviewSection({ shop }: { shop: BranchId }) {
   const { sales, expenses, activities } = useToto();
   const scopedName = shop === "all" ? "all shops" : branchLabel(shop);
 
-  const filteredSales = shop === "all" ? sales : sales.filter((s) => s.branch === shop);
-  const filteredExpenses = shop === "all" ? expenses : expenses.filter((e) => e.branch === shop);
-  const performanceBranches = [...new Set(filteredSales.map((sale) => sale.branch))].map((id) => ({
-    id,
-    name: branchLabel(id),
-  }));
+  const filteredSales = shop === "all" ? sales : sales.filter(s => s.branch === shop);
+  const filteredExpenses = shop === "all" ? expenses : expenses.filter(e => e.branch === shop);
+  const performanceBranches = [...new Set(filteredSales.map((sale) => sale.branch))]
+    .map((id) => ({ id, name: branchLabel(id) }));
 
   const grossRevenue = filteredSales.reduce((sum, s) => sum + s.total, 0);
   const vat = filteredSales.reduce((sum, s) => sum + s.vat, 0);
@@ -193,10 +185,7 @@ function OverviewSection({ shop }: { shop: BranchId }) {
                     <p className="text-sm font-semibold" style={{ color: colors.primary }}>
                       {money(rev)}
                     </p>
-                    <p
-                      className="text-xs"
-                      style={{ color: profitMargin > 0 ? colors.accent : colors.secondary }}
-                    >
+                    <p className="text-xs" style={{ color: profitMargin > 0 ? colors.accent : colors.secondary }}>
                       {profitMargin > 0 ? `+${money(profitMargin)}` : money(profitMargin)}
                     </p>
                   </div>
@@ -216,10 +205,7 @@ function OverviewSection({ shop }: { shop: BranchId }) {
           <div className="mt-4 space-y-3 max-h-[300px] overflow-y-auto">
             {activities.length ? (
               activities.slice(0, 5).map((a, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 py-2 border-b border-[#F0EEF4] last:border-0"
-                >
+                <div key={i} className="flex items-center gap-3 py-2 border-b border-[#F0EEF4] last:border-0">
                   <div className="size-2 rounded-full" style={{ background: colors.accent }} />
                   <div className="flex-1">
                     <p className="text-sm font-medium" style={{ color: colors.textDark }}>
@@ -247,7 +233,7 @@ function OverviewSection({ shop }: { shop: BranchId }) {
 
 type CartItem = SaleLine & { stock: number; imageUrl?: string | null | undefined };
 
-function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
+export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const { products, recordSale, receipt } = useToto();
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -255,8 +241,7 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const [scanningBarcode, setScanningBarcode] = useState(false);
   const [scanningQR, setScanningQR] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const isMobileLayout =
-    typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+  const isMobileLayout = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
 
   const activeBranch: ShopId = shop === "all" ? "toto" : shop;
   const assigned = branchLabel(activeBranch);
@@ -402,16 +387,7 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const total = cart.reduce((sum, i) => sum + i.sell * i.qty, 0);
   const count = cart.reduce((sum, i) => sum + i.qty, 0);
 
-  function renderReceiptWindow(sale: {
-    receipt: number;
-    date: string;
-    branch: BranchId;
-    cashier: string;
-    payment: "Cash" | "Lipa Namba";
-    lines: SaleLine[];
-    total: number;
-    vat: number;
-  }) {
+  function renderReceiptWindow(sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number }) {
     const rows = sale.lines
       .map(
         (line) => `
@@ -439,6 +415,12 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
               color: #111827;
               background: #fff;
             }
+            .receipt-logo {
+              width: 44px;
+              height: 44px;
+              margin: 0 auto 8px;
+              border-radius: 10px;
+            }
             .receipt {
               width: 100%;
               max-width: 360px;
@@ -458,6 +440,7 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
         <body>
           <div class="receipt">
             <div class="center">
+              <img class="receipt-logo" src="/totoz-empire-logo.svg" alt="Totoz Empire" />
               <h2>Totoz Empire</h2>
               <p>Retail Management</p>
             </div>
@@ -588,15 +571,11 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
                 >
                   <ProductThumb src={p.imageUrl} alt={p.name} className="size-10" />
                   <span className="grid min-w-0 flex-1 gap-1">
-                    <strong className="truncate text-[12.5px] font-semibold text-slate-800">
-                      {p.name}
-                    </strong>
+                    <strong className="truncate text-[12.5px] font-semibold text-slate-800">{p.name}</strong>
                     <span className="truncate font-mono text-[10px] text-slate-500">
                       {p.barcode} · {money(p.sell)}
                     </span>
-                    <span
-                      className={cn("text-[10px]", soldOut ? "text-red-500" : "text-violet-700")}
-                    >
+                    <span className={cn("text-[10px]", soldOut ? "text-red-500" : "text-violet-700")}>
                       {soldOut ? "Out of stock" : `${stock} in stock`}
                     </span>
                   </span>
@@ -626,12 +605,8 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
                 <div className="flex min-w-0 gap-3">
                   <ProductThumb src={item.imageUrl} alt={item.name} className="size-10" />
                   <div className="min-w-0">
-                    <strong className="block truncate text-[12.5px] font-semibold text-slate-800">
-                      {item.name}
-                    </strong>
-                    <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">
-                      {item.sku}
-                    </div>
+                    <strong className="block truncate text-[12.5px] font-semibold text-slate-800">{item.name}</strong>
+                    <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">{item.sku}</div>
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         className="size-7 rounded-md border border-violet-200 bg-white text-violet-700"
@@ -651,9 +626,7 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
                     </div>
                   </div>
                 </div>
-                <strong className="font-mono text-sm text-slate-800">
-                  {money(item.sell * item.qty)}
-                </strong>
+                <strong className="font-mono text-sm text-slate-800">{money(item.sell * item.qty)}</strong>
               </div>
             ))
           ) : (
@@ -761,7 +734,7 @@ function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   );
 }
 
-/* ---------------- Warehouse ---------------- */
+/* ---------------- Inventory ---------------- */
 
 type ProductForm = {
   name: string;
@@ -771,7 +744,7 @@ type ProductForm = {
   buy: string;
   sell: string;
   min: string;
-  stock: Partial<Record<string, string>>;
+  stock: Partial<Record<ShopId, string>>;
   imageFile: File | null;
   removeImage: boolean;
 };
@@ -789,28 +762,22 @@ const emptyProduct: ProductForm = {
   removeImage: false,
 };
 
-const stockLabel = (p: Product, shop?: string) => {
+const stockLabel = (p: Product, shop?: BranchId) => {
   if (shop && shop !== "all") {
-    return (p.stock[shop] ?? 0) > 0 ? `${branchLabel(shop)} ${p.stock[shop] ?? 0}` : "No stock yet";
+    return (p.stock[shop] ?? 0) > 0 ? `${branchLabel(shop)} ${(p.stock[shop] ?? 0)}` : "No stock yet";
   }
 
-  const parts = Object.keys(p.stock)
+  const parts = shopIds
     .filter((id) => (p.stock[id] ?? 0) > 0)
     .map((id) => `${branchLabel(id)} ${p.stock[id]}`);
   return parts.length ? parts.join(" · ") : "No stock yet";
 };
 
-export function InventorySection({
-  shop,
-  readOnly = true,
-}: {
-  shop: BranchId;
-  readOnly?: boolean;
-}) {
+export function InventorySection({ shop, readOnly = true }: { shop: BranchId; readOnly?: boolean }) {
   const { products, addProduct, updateProduct, removeProduct, adjustStock } = useToto();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editingBranch, setEditingBranch] = useState<string | null>(null);
+  const [editingBranch, setEditingBranch] = useState<ShopId | null>(null);
   const [form, setForm] = useState(emptyProduct);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -819,14 +786,15 @@ export function InventorySection({
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [adjust, setAdjust] = useState<{
     sku: string;
-    branch: string;
+    branch: ShopId;
     delta: string;
     reason: string;
   } | null>(null);
 
-  // Only show products that belong to warehouses
-  const warehouseIds = warehouseBranches.map((b) => b.id);
-  const rows = products.filter((p) => warehouseIds.includes(p.branch));
+  const defaultShop: ShopId = shop === "all" ? "toto" : shop;
+  const rows = shop === "all"
+    ? products
+    : products.filter((p) => Object.prototype.hasOwnProperty.call(p.stock, shop));
 
   useEffect(() => {
     return () => {
@@ -861,7 +829,7 @@ export function InventorySection({
   function openEdit(p: Product) {
     setEditing(p.sku);
     setEditingBranch(p.branch);
-    const stock: Partial<Record<string, string>> = {};
+    const stock: Partial<Record<ShopId, string>> = {};
     const targetShop = p.branch;
     if (p.stock[targetShop] !== undefined) {
       stock[targetShop] = String(p.stock[targetShop]);
@@ -913,10 +881,10 @@ export function InventorySection({
       return;
     }
 
-    const stock: Partial<Record<string, number>> = {};
-    const targetShop = editingBranch || (warehouseIds[0] ?? "warehouse-1");
+    const stock: Partial<Record<ShopId, number>> = {};
+    const targetShop = editingBranch || defaultShop;
     const quantity = Number(form.stock[targetShop]) || 0;
-    if (quantity > 0) {
+    if (quantity > 0 || shop !== "all") {
       stock[targetShop] = quantity;
     }
 
@@ -937,8 +905,9 @@ export function InventorySection({
     let result: SaveResult;
     try {
       result = await (editing
-        ? updateProduct(editing, payload, targetShop as ShopId)
-        : addProduct(payload, targetShop as ShopId));
+        ? updateProduct(editing, payload, targetShop)
+        : addProduct(payload, targetShop)
+      );
     } catch (err: any) {
       toast("Product could not be saved", {
         description: err?.message || "Please try again.",
@@ -963,36 +932,30 @@ export function InventorySection({
     <Panel>
       <PanelHead
         title="Inventory"
-        description={
-          readOnly
-            ? "Shop stock is replenished through Stocking orders."
-            : "Stock tracked for this location."
-        }
+        description={readOnly ? "Shop stock is replenished through Stocking orders." : "Stock tracked for this location."}
       >
-        {!readOnly && (
-          <>
-            <button
-              className={btn}
-              onClick={() => {
-                if (!products.length) {
-                  toast("Add a product first.");
-                  return;
-                }
-                setAdjust({
-                  sku: rows[0]?.sku ?? products[0]!.sku,
-                  branch: rows[0]?.branch ?? warehouseIds[0],
-                  delta: "",
-                  reason: "",
-                });
-              }}
-            >
-              Stock adjustment
-            </button>
-            <button className={btnPrimary} onClick={openNew}>
-              New product
-            </button>
-          </>
-        )}
+        {!readOnly && <>
+        <button
+          className={btn}
+          onClick={() => {
+            if (!products.length) {
+              toast("Add a product first.");
+              return;
+            }
+            setAdjust({
+              sku: rows[0]?.sku ?? products[0]!.sku,
+              branch: rows[0]?.branch ?? defaultShop,
+              delta: "",
+              reason: "",
+            });
+          }}
+        >
+          Stock adjustment
+        </button>
+        <button className={btnPrimary} onClick={openNew}>
+          New product
+        </button>
+        </>}
       </PanelHead>
       {rows.length ? (
         <div className="overflow-x-auto">
@@ -1001,11 +964,11 @@ export function InventorySection({
               <tr>
                 {[
                   "Product",
-                  "Stock by Warehouse",
+                  "Stock by shop",
                   "Barcode",
                   "Buying",
                   "Selling",
-                  "Total qty",
+                  shop === "all" ? "Total qty" : `${branchLabel(shop)} qty`,
                   "Min",
                   "Status",
                   "",
@@ -1021,13 +984,10 @@ export function InventorySection({
             </thead>
             <tbody>
               {rows.map((p) => {
-                const totalQty = Object.values(p.stock).reduce((sum, q) => sum + (q || 0), 0);
-                const low = totalQty <= p.min;
+                const qty = stockOf(p, shop);
+                const low = qty <= p.min;
                 return (
-                  <tr
-                    key={`${p.branch}:${p.sku}`}
-                    className="border-b border-border/50 last:border-0"
-                  >
+                  <tr key={`${p.branch}:${p.sku}`} className="border-b border-border/50 last:border-0">
                     <td className="px-2.5 py-3">
                       <div className="flex items-center gap-3">
                         <ProductThumb src={p.imageUrl} alt={p.name} />
@@ -1040,12 +1000,12 @@ export function InventorySection({
                       </div>
                     </td>
                     <td className="px-2.5 py-3 text-[12px] text-muted-foreground">
-                      {stockLabel(p)}
+                      {stockLabel(p, shop)}
                     </td>
                     <td className="px-2.5 py-3 font-mono">{p.barcode}</td>
                     <td className="px-2.5 py-3 font-mono">{money(p.buy)}</td>
                     <td className="px-2.5 py-3 font-mono">{money(p.sell)}</td>
-                    <td className="px-2.5 py-3 font-mono">{totalQty}</td>
+                    <td className="px-2.5 py-3 font-mono">{qty}</td>
                     <td className="px-2.5 py-3 font-mono text-muted-foreground">{p.min}</td>
                     <td className="px-2.5 py-3">
                       <Pill tone={low ? "low" : "ok"}>{low ? "Low stock" : "In stock"}</Pill>
@@ -1058,25 +1018,21 @@ export function InventorySection({
                         >
                           QR
                         </button>
-                        {!readOnly && (
-                          <button
-                            className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
-                            onClick={() => openEdit(p)}
-                          >
-                            Edit
-                          </button>
-                        )}
-                        {!readOnly && (
-                          <button
-                            className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
-                            onClick={() => {
-                              removeProduct(p.sku, p.branch as ShopId);
-                              toast("Product removed", { description: p.name });
-                            }}
-                          >
-                            Delete
-                          </button>
-                        )}
+                        {!readOnly && <button
+                          className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
+                          onClick={() => openEdit(p)}
+                        >
+                          Edit
+                        </button>}
+                        {!readOnly && <button
+                          className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            removeProduct(p.sku, p.branch);
+                            toast("Product removed", { description: p.name });
+                          }}
+                        >
+                          Delete
+                        </button>}
                       </div>
                     </td>
                   </tr>
@@ -1087,23 +1043,24 @@ export function InventorySection({
         </div>
       ) : (
         <EmptyState
-          title="No products in warehouse"
-          copy="Add products to any warehouse to start tracking stock."
+          title="No products yet"
+          copy="Register your products with SKU, barcode, buying and selling price, stock level and minimum stock to start tracking inventory."
         />
       )}
 
       <Dialog
         open={open}
         onOpenChange={(next) => {
+          // Android can emit a dismiss event when the external camera returns.
+          // Closing is handled only by the explicit controls below.
           if (next) {
             setOpen(true);
-            return;
           }
-          closeProductDialog();
         }}
       >
         <DialogContent
           className="max-h-[85vh] overflow-y-auto sm:max-w-lg"
+          showCloseButton={false}
           onInteractOutside={(event) => event.preventDefault()}
           onEscapeKeyDown={(event) => {
             event.preventDefault();
@@ -1121,8 +1078,7 @@ export function InventorySection({
           <DialogHeader>
             <DialogTitle>{editing ? "Edit product" : "New product"}</DialogTitle>
             <DialogDescription>
-              Leave SKU or barcode blank to generate them automatically. Stock is entered for the
-              selected warehouse.
+              Leave SKU or barcode blank to generate them automatically. Stock is entered for this branch only.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1131,11 +1087,7 @@ export function InventorySection({
                 Product image
               </span>
               <div className="flex items-center gap-3 rounded-md border border-border bg-card p-3">
-                <ProductThumb
-                  src={imagePreview}
-                  alt={form.name || "Product image"}
-                  className="size-16"
-                />
+                <ProductThumb src={imagePreview} alt={form.name || "Product image"} className="size-16" />
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium">
                     {imagePreview ? "One compressed image selected" : "No image selected"}
@@ -1246,21 +1198,13 @@ export function InventorySection({
           </div>
           <div className="mt-1 grid gap-3">
             <span className="text-[12px] font-medium text-muted-foreground">Stock</span>
-            <Field
-              label={`Stock in ${branchLabel(editingBranch || (warehouseIds[0] ?? "warehouse-1"))}`}
-            >
+            <Field label={`Stock in ${branchLabel(editingBranch || defaultShop)}`}>
               <input
                 className={field}
                 inputMode="numeric"
-                value={form.stock[editingBranch || (warehouseIds[0] ?? "warehouse-1")] ?? ""}
+                value={form.stock[editingBranch || defaultShop] ?? ""}
                 onChange={(e) =>
-                  setForm({
-                    ...form,
-                    stock: {
-                      ...form.stock,
-                      [editingBranch || (warehouseIds[0] ?? "warehouse-1")]: e.target.value,
-                    },
-                  })
+                  setForm({ ...form, stock: { ...form.stock, [editingBranch || defaultShop]: e.target.value } })
                 }
               />
             </Field>
@@ -1280,16 +1224,11 @@ export function InventorySection({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Product QR code</DialogTitle>
-            <DialogDescription>
-              {qrProduct ? `${qrProduct.name} · ${qrProduct.sku}` : ""}
-            </DialogDescription>
+            <DialogDescription>{qrProduct ? `${qrProduct.name} · ${qrProduct.sku}` : ""}</DialogDescription>
           </DialogHeader>
           {qrProduct && (
             <div className="flex flex-col items-center gap-3 py-2">
-              <ProductQRCode
-                value={qrProduct.barcode || qrProduct.sku || qrProduct.name}
-                size={220}
-              />
+              <ProductQRCode value={qrProduct.barcode || qrProduct.sku || qrProduct.name} size={220} />
               <div className="text-center text-[12px] text-muted-foreground">
                 <div className="font-medium text-foreground">{qrProduct.name}</div>
                 <div className="font-mono">{qrProduct.barcode || qrProduct.sku}</div>
@@ -1313,7 +1252,7 @@ export function InventorySection({
                   value={`${adjust.branch}:${adjust.sku}`}
                   onChange={(e) => {
                     const [branch, sku] = e.target.value.split(":");
-                    setAdjust({ ...adjust, branch: branch, sku: sku || "" });
+                    setAdjust({ ...adjust, branch: branch as ShopId, sku: sku || "" });
                   }}
                 >
                   {rows.map((p) => (
@@ -1323,19 +1262,16 @@ export function InventorySection({
                   ))}
                 </select>
               </Field>
-              <Field label="Warehouse">
+              <Field label="Shop">
                 <select
                   className={field}
                   value={adjust.branch}
-                  onChange={(e) => setAdjust({ ...adjust, branch: e.target.value })}
+                  onChange={(e) => setAdjust({ ...adjust, branch: e.target.value as ShopId })}
                 >
-                  {warehouseBranches.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name} (
-                      {products.find((p) => p.sku === adjust.sku && p.branch === w.id)?.stock[
-                        w.id
-                      ] ?? 0}
-                      )
+                  {shopIds.map((id) => (
+                    <option key={id} value={id}>
+                      {branchLabel(id)} (
+                      {products.find((p) => p.sku === adjust.sku && p.branch === id)?.stock[id] ?? 0})
                     </option>
                   ))}
                 </select>
@@ -1372,7 +1308,7 @@ export function InventorySection({
                 }
                 adjustStock(
                   adjust.sku,
-                  adjust.branch as ShopId,
+                  adjust.branch,
                   delta,
                   adjust.reason.trim() || "No reason given",
                 );
@@ -1391,7 +1327,7 @@ export function InventorySection({
 
 /* ---------------- Expenses ---------------- */
 
-function ExpensesSection({ shop }: { shop: BranchId }) {
+export function ExpensesSection({ shop }: { shop: BranchId }) {
   const { expenses, addExpense, removeExpense } = useToto();
   const [open, setOpen] = useState(false);
   const fixedBranch: BranchId = shop === "all" ? "toto" : shop;
@@ -1575,7 +1511,7 @@ function ExpensesSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Staff ---------------- */
 
-function StaffSection({ shop }: { shop: BranchId }) {
+export function StaffSection({ shop }: { shop: BranchId }) {
   const queryClient = useQueryClient();
   const listStaffFn = useServerFn(listStaff);
   const createStaffFn = useServerFn(createStaffAccount);
@@ -1595,17 +1531,12 @@ function StaffSection({ shop }: { shop: BranchId }) {
   const currentBranchName = branchLabel(shop);
   const staffBranch: ShopId = shop === "all" ? "toto" : shop;
 
-  const {
-    data: people = [],
-    isLoading,
-    error,
-  } = useQuery({
+  const { data: people = [], isLoading, error } = useQuery({
     queryKey: ["staff-accounts", staffBranch],
     queryFn: () => listStaffFn({ data: { branch: staffBranch } }),
   });
 
-  const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: ["staff-accounts", staffBranch] });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["staff-accounts", staffBranch] });
 
   const submit = async () => {
     if (!form.name.trim()) {
@@ -1684,20 +1615,8 @@ function StaffSection({ shop }: { shop: BranchId }) {
               copy={person.email}
               top={
                 <div className="flex items-center gap-2">
-                  <Pill
-                    tone={
-                      person.role === "owner"
-                        ? "ok"
-                        : person.role === "manager"
-                          ? "warn"
-                          : "neutral"
-                    }
-                  >
-                    {person.role === "owner"
-                      ? "Owner"
-                      : person.role === "manager"
-                        ? "Manager"
-                        : "Cashier"}
+                  <Pill tone={person.role === "owner" ? "ok" : person.role === "manager" ? "warn" : "neutral"}>
+                    {person.role === "owner" ? "Owner" : person.role === "manager" ? "Manager" : "Cashier"}
                   </Pill>
                   {(isOwner || (isManager && person.role === "cashier")) && (
                     <button
@@ -1759,9 +1678,7 @@ function StaffSection({ shop }: { shop: BranchId }) {
               <select
                 className={field}
                 value={form.role}
-                onChange={(e) =>
-                  setForm({ ...form, role: e.target.value as "owner" | "manager" | "cashier" })
-                }
+                onChange={(e) => setForm({ ...form, role: e.target.value as "owner" | "manager" | "cashier" })}
               >
                 <option value="cashier">Cashier</option>
                 {isOwner && <option value="manager">Manager</option>}
@@ -1769,7 +1686,9 @@ function StaffSection({ shop }: { shop: BranchId }) {
               </select>
             </Field>
             <div>
-              <label className="text-[12px] font-medium text-muted-foreground">Assigned shop</label>
+              <label className="text-[12px] font-medium text-muted-foreground">
+                Assigned shop
+              </label>
               <div className="mt-1.5 flex h-9 items-center rounded-md border border-border bg-muted px-3 text-[13px] text-foreground">
                 {currentBranchName}
               </div>
@@ -1791,7 +1710,7 @@ function StaffSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Reports ---------------- */
 
-function ReportsSection({ shop }: { shop: BranchId }) {
+export function ReportsSection({ shop }: { shop: BranchId }) {
   const store = useToto();
   const scope = <T extends { branch: BranchId }>(rows: T[]) =>
     shop === "all" ? rows : rows.filter((r) => r.branch === shop);
@@ -1799,10 +1718,7 @@ function ReportsSection({ shop }: { shop: BranchId }) {
   const sales = scope(store.sales);
   const expenses = scope(store.expenses);
   const returns = scope(store.returns);
-  const products =
-    shop === "all"
-      ? store.products
-      : store.products.filter((p) => Object.prototype.hasOwnProperty.call(p.stock, shop));
+  const products = shop === "all" ? store.products : store.products.filter((p) => Object.prototype.hasOwnProperty.call(p.stock, shop));
   const [openReport, setOpenReport] = useState<string | null>("summary");
 
   const grossRevenue = sales.reduce((sum, sale) => sum + sale.total, 0);
@@ -1811,9 +1727,7 @@ function ReportsSection({ shop }: { shop: BranchId }) {
   const costOfGoods = sales.reduce((sum, sale) => sum + sale.cost, 0);
   const expenseTotal = expenses.reduce((sum, expense) => sum + expense.amount, 0);
   const netProfit = netRevenue - costOfGoods - expenseTotal;
-  const cashSales = sales
-    .filter((sale) => sale.payment === "Cash")
-    .reduce((sum, sale) => sum + sale.total, 0);
+  const cashSales = sales.filter((sale) => sale.payment === "Cash").reduce((sum, sale) => sum + sale.total, 0);
   const lipaSales = grossRevenue - cashSales;
   const lowStock = products.filter((product) => stockOf(product, shop) <= product.min);
   const topProducts = Object.entries(
@@ -1823,8 +1737,7 @@ function ReportsSection({ shop }: { shop: BranchId }) {
         acc[line.name] = (acc[line.name] ?? 0) + line.qty;
         return acc;
       }, {}),
-  )
-    .sort(([, a], [, b]) => b - a)
+  ).sort(([, a], [, b]) => b - a)
     .slice(0, 5)
     .map(([name, qty]) => ({ label: name, value: `${qty} sold` }));
 
@@ -1907,7 +1820,7 @@ function ReportsSection({ shop }: { shop: BranchId }) {
     })),
   };
 
-  const selectedRows = openReport ? (reportDetails[openReport] ?? []) : [];
+  const selectedRows = openReport ? reportDetails[openReport] ?? [] : [];
 
   return (
     <Panel>
@@ -1980,9 +1893,7 @@ function ReportsSection({ shop }: { shop: BranchId }) {
             <span>−</span>
             <span>{money(expenseTotal)}</span>
             <span>=</span>
-            <span
-              className={cn("font-semibold", netProfit >= 0 ? "text-emerald-600" : "text-rose-600")}
-            >
+            <span className={cn("font-semibold", netProfit >= 0 ? "text-emerald-600" : "text-rose-600")}>
               {money(netProfit)}
             </span>
           </div>
@@ -2001,9 +1912,7 @@ function ReportsSection({ shop }: { shop: BranchId }) {
                 className="flex items-center justify-between gap-3 rounded-xl border border-[#F0EEF4] bg-[#F9F8FC] px-3 py-2.5"
               >
                 <span className="text-[12px] text-slate-600">{row.label}</span>
-                <span className="font-mono text-[12px] font-semibold text-slate-800">
-                  {row.value}
-                </span>
+                <span className="font-mono text-[12px] font-semibold text-slate-800">{row.value}</span>
               </div>
             ))}
           </div>
@@ -2019,7 +1928,7 @@ function ReportsSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Returns ---------------- */
 
-function ReturnsSection({
+export function ReturnsSection({
   shop,
   cashier,
   isOwner,
@@ -2156,9 +2065,7 @@ function ReturnsSection({
               Return items · receipt #{sale ? String(sale.receipt).padStart(4, "0") : ""}
             </DialogTitle>
             <DialogDescription>
-              {sale
-                ? `Original shop: ${branchLabel(sale.branch)}. Returned stock will be credited back here.`
-                : "Choose how many units of each line are coming back."}
+              {sale ? `Original shop: ${branchLabel(sale.branch)}. Returned stock will be credited back here.` : "Choose how many units of each line are coming back."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -2213,7 +2120,7 @@ function ReturnsSection({
 
 /* ---------------- Sales ---------------- */
 
-function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: boolean }) {
+export function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: boolean }) {
   const { sales, refreshData } = useToto();
   const [currentDay, setCurrentDay] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -2250,7 +2157,9 @@ function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: bool
 
   const effectiveShop = shop === "all" ? null : shop;
   const scopedSales = sales.filter((s) => (effectiveShop ? s.branch === effectiveShop : true));
-  const dayFilteredSales = isOwner ? scopedSales : scopedSales.filter((s) => s.date === currentDay);
+  const dayFilteredSales = isOwner
+    ? scopedSales
+    : scopedSales.filter((s) => s.date === currentDay);
 
   const sortedSales = [...dayFilteredSales].sort((a, b) => {
     if (a.date > b.date) return -1;
@@ -2273,54 +2182,26 @@ function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: bool
         <table className="w-full border-collapse text-sm">
           <thead style={{ background: colors.offWhite }}>
             <tr className="border-b border-[#F0EEF4]">
-              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>
-                Receipt
-              </th>
-              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>
-                Date
-              </th>
-              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>
-                Branch
-              </th>
-              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>
-                Cashier
-              </th>
-              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>
-                Payment
-              </th>
-              <th className="px-4 py-3 text-right font-medium" style={{ color: colors.textMuted }}>
-                Total
-              </th>
-              <th className="px-4 py-3 text-right font-medium" style={{ color: colors.textMuted }}>
-                VAT
-              </th>
+              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Receipt</th>
+              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Date</th>
+              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Branch</th>
+              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Cashier</th>
+              <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Payment</th>
+              <th className="px-4 py-3 text-right font-medium" style={{ color: colors.textMuted }}>Total</th>
+              <th className="px-4 py-3 text-right font-medium" style={{ color: colors.textMuted }}>VAT</th>
             </tr>
           </thead>
           <tbody>
             {sortedSales.map((sale) => (
-              <tr
-                key={sale.id}
-                className="border-b border-[#F0EEF4] hover:bg-[#F7F7FA] transition-colors"
-              >
+              <tr key={sale.id} className="border-b border-[#F0EEF4] hover:bg-[#F7F7FA] transition-colors">
                 <td className="px-4 py-3 font-mono" style={{ color: colors.textDark }}>
-                  #{String(sale.receipt).padStart(4, "0")}
+                  #{String(sale.receipt).padStart(4, '0')}
                 </td>
-                <td className="px-4 py-3" style={{ color: colors.textDark }}>
-                  {sale.date}
-                </td>
-                <td className="px-4 py-3" style={{ color: colors.textDark }}>
-                  {branchLabel(sale.branch)}
-                </td>
-                <td className="px-4 py-3" style={{ color: colors.textDark }}>
-                  {sale.cashier}
-                </td>
-                <td className="px-4 py-3 capitalize" style={{ color: colors.textDark }}>
-                  {sale.payment}
-                </td>
-                <td
-                  className="px-4 py-3 text-right font-mono font-semibold"
-                  style={{ color: colors.textDark }}
-                >
+                <td className="px-4 py-3" style={{ color: colors.textDark }}>{sale.date}</td>
+                <td className="px-4 py-3" style={{ color: colors.textDark }}>{branchLabel(sale.branch)}</td>
+                <td className="px-4 py-3" style={{ color: colors.textDark }}>{sale.cashier}</td>
+                <td className="px-4 py-3 capitalize" style={{ color: colors.textDark }}>{sale.payment}</td>
+                <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: colors.textDark }}>
                   {money(sale.total)}
                 </td>
                 <td className="px-4 py-3 text-right font-mono" style={{ color: colors.textMuted }}>
@@ -2331,11 +2212,8 @@ function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: bool
           </tbody>
         </table>
       </div>
-      <div
-        className="px-4 py-3 border-t border-[#F0EEF4] text-sm"
-        style={{ color: colors.textMuted }}
-      >
-        {sortedSales.length} receipt{sortedSales.length !== 1 ? "s" : ""}
+      <div className="px-4 py-3 border-t border-[#F0EEF4] text-sm" style={{ color: colors.textMuted }}>
+        {sortedSales.length} receipt{sortedSales.length !== 1 ? 's' : ''}
       </div>
     </div>
   );
@@ -2343,7 +2221,7 @@ function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: bool
 
 /* ---------------- Settings ---------------- */
 
-function SettingsSection() {
+export function SettingsSection() {
   const { settings, updateSettings } = useToto();
   const [form, setForm] = useState(settings);
 
@@ -2441,484 +2319,3 @@ function SettingsSection() {
     </Panel>
   );
 }
-
-/* ---------------- NEW: Stock Request (Cashier) ---------------- */
-
-type RequestItem = {
-  sku: string;
-  name: string;
-  sourceBranchId: string;
-  quantity: number;
-  maxAvailable: number;
-};
-
-function StockRequestSection({ shop }: { shop: BranchId }) {
-  const { products, createStockOrder, orders } = useToto();
-  const { user } = useAuth();
-  const [items, setItems] = useState<RequestItem[]>([]);
-  const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<string | null>(null);
-
-  const targetBranchId = getBranchUuid(shop);
-  const requester = user?.email || "Unknown";
-  const shopProducts = products.filter((p) => stockOf(p, shop) >= 0);
-  const warehouses = warehouseBranches; // renamed
-
-  const addItem = () => {
-    if (!selectedProduct) return;
-    const product = products.find((p) => p.sku === selectedProduct);
-    if (!product) return;
-
-    const warehouseWithStock = warehouses.find((w) => stockOf(product, w.id) > 0);
-    if (!warehouseWithStock) {
-      toast("This product is not available in any warehouse.");
-      return;
-    }
-
-    const sourceBranchId = getBranchUuid(warehouseWithStock.id);
-    const maxAvailable = stockOf(product, warehouseWithStock.id);
-
-    setItems((prev) => [
-      ...prev,
-      {
-        sku: product.sku,
-        name: product.name,
-        sourceBranchId,
-        quantity: 1,
-        maxAvailable,
-      },
-    ]);
-    setSelectedProduct(null);
-  };
-
-  const updateQuantity = (index: number, quantity: number) => {
-    setItems((prev) => {
-      const newItems = [...prev];
-      const max = newItems[index].maxAvailable;
-      newItems[index].quantity = Math.max(1, Math.min(quantity, max));
-      return newItems;
-    });
-  };
-
-  const removeItem = (index: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const changeSource = (index: number, sourceBranchId: string) => {
-    const warehouse = warehouses.find((w) => getBranchUuid(w.id) === sourceBranchId);
-    if (!warehouse) return;
-    const product = products.find((p) => p.sku === items[index].sku);
-    if (!product) return;
-    const maxAvailable = stockOf(product, warehouse.id);
-
-    setItems((prev) => {
-      const newItems = [...prev];
-      newItems[index].sourceBranchId = sourceBranchId;
-      newItems[index].maxAvailable = maxAvailable;
-      newItems[index].quantity = Math.min(newItems[index].quantity, maxAvailable);
-      return newItems;
-    });
-  };
-
-  const submitRequest = async () => {
-    if (!items.length) {
-      toast("Add at least one item to request.");
-      return;
-    }
-    for (const item of items) {
-      if (item.quantity <= 0) {
-        toast(`Invalid quantity for ${item.name}.`);
-        return;
-      }
-      if (item.quantity > item.maxAvailable) {
-        toast(`Only ${item.maxAvailable} units of ${item.name} available.`);
-        return;
-      }
-    }
-
-    setSubmitting(true);
-    try {
-      const order = await createStockOrder({
-        targetBranchId,
-        requestedBy: requester,
-        notes: notes.trim() || undefined,
-        items: items.map((item) => ({
-          sku: item.sku,
-          sourceBranchId: item.sourceBranchId,
-          quantity: item.quantity,
-        })),
-      });
-      toast("Stock request submitted", {
-        description: `Order #${order.id.slice(0, 8)} · ${items.length} item(s)`,
-      });
-      setItems([]);
-      setNotes("");
-    } catch (err: any) {
-      toast("Failed to submit request", {
-        description: err?.message || "Please try again.",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const myOrders = orders.filter((o) => o.target_branch_id === targetBranchId);
-
-  return (
-    <div className="space-y-6">
-      <Panel>
-        <PanelHead
-          title="Stock Request"
-          description={`Request stock from warehouses for ${branchLabel(shop)}`}
-        />
-        <div className="grid gap-3">
-          <div className="flex flex-wrap gap-2">
-            <select
-              className={cn(field, "flex-1 min-w-[200px]")}
-              value={selectedProduct || ""}
-              onChange={(e) => setSelectedProduct(e.target.value || null)}
-            >
-              <option value="">Select a product...</option>
-              {shopProducts.map((p) => (
-                <option key={p.sku} value={p.sku}>
-                  {p.name} · {p.sku}
-                </option>
-              ))}
-            </select>
-            <button className={btnPrimary} onClick={addItem}>
-              Add Item
-            </button>
-          </div>
-        </div>
-
-        {items.length > 0 ? (
-          <div className="mt-4 space-y-3">
-            {items.map((item, index) => {
-              const warehouseName =
-                branches.find((b) => getBranchUuid(b.id) === item.sourceBranchId)?.name ||
-                "Unknown";
-              return (
-                <div
-                  key={`${item.sku}-${index}`}
-                  className="flex flex-wrap items-center gap-3 p-3 rounded-lg border border-border bg-card"
-                >
-                  <div className="flex-1 min-w-[150px]">
-                    <div className="text-sm font-medium">{item.name}</div>
-                    <div className="text-xs text-muted-foreground">{item.sku}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs">Warehouse:</label>
-                    <select
-                      className={cn(field, "w-auto min-w-[120px]")}
-                      value={item.sourceBranchId}
-                      onChange={(e) => changeSource(index, e.target.value)}
-                    >
-                      {warehouses.map((w) => {
-                        const stock = stockOf(
-                          products.find((p) => p.sku === item.sku)!,
-                          w.id,
-                        );
-                        return (
-                          <option key={w.id} value={getBranchUuid(w.id)}>
-                            {w.name} ({stock} available)
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-xs">Qty:</label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={item.maxAvailable}
-                      value={item.quantity}
-                      onChange={(e) => updateQuantity(index, Number(e.target.value))}
-                      className={cn(field, "w-20")}
-                    />
-                    <span className="text-xs text-muted-foreground">/ {item.maxAvailable}</span>
-                  </div>
-                  <button
-                    className="text-destructive hover:bg-destructive/10 p-1 rounded"
-                    onClick={() => removeItem(index)}
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
-              );
-            })}
-            <div className="mt-2">
-              <Field label="Notes (optional)">
-                <input
-                  className={field}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add any special instructions..."
-                />
-              </Field>
-            </div>
-            <button
-              className={btnPrimary}
-              onClick={submitRequest}
-              disabled={submitting || items.length === 0}
-            >
-              {submitting ? "Submitting..." : "Submit Request"}
-            </button>
-          </div>
-        ) : (
-          <EmptyState
-            title="No items requested"
-            copy="Select a product above and add it to your request."
-          />
-        )}
-      </Panel>
-
-      <Panel>
-        <PanelHead title="My Requests" description="Track your submitted stock requests" />
-        {myOrders.length > 0 ? (
-          <div className="space-y-3">
-            {myOrders.map((order) => (
-              <div key={order.id} className="border border-border rounded-lg p-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="text-sm font-medium">Request #{order.id.slice(0, 8)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {new Date(order.created_at).toLocaleDateString()} · {order.requested_by}
-                    </div>
-                  </div>
-                  <Pill
-                    tone={
-                      order.status === "pending"
-                        ? "warn"
-                        : order.status === "fulfilled"
-                          ? "ok"
-                          : order.status === "rejected"
-                            ? "low"
-                            : "neutral"
-                    }
-                  >
-                    {order.status}
-                  </Pill>
-                </div>
-                {order.items && order.items.length > 0 && (
-                  <div className="mt-2 text-sm">
-                    {order.items.map((item, i) => (
-                      <span key={i} className="inline-block mr-3">
-                        {item.sku} × {item.quantity}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {order.notes && (
-                  <div className="mt-1 text-xs text-muted-foreground">{order.notes}</div>
-                )}
-                {order.approved_at && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Approved: {new Date(order.approved_at).toLocaleString()}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <EmptyState title="No requests yet" copy="Your submitted requests will appear here." />
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-/* ---------------- NEW: Pending Orders (Owner) ---------------- */
-
-function PendingOrdersSection({ shop }: { shop: BranchId }) {
-  const { orders, approveOrder, rejectOrder, refreshData } = useToto();
-  const [processingId, setProcessingId] = useState<string | null>(null);
-
-  const pendingOrders = orders.filter((o) => o.status === "pending");
-
-  const handleApprove = async (orderId: string) => {
-    setProcessingId(orderId);
-    try {
-      await approveOrder(orderId);
-      toast("Order approved", {
-        description: "Stock has been transferred.",
-      });
-    } catch (err: any) {
-      toast("Failed to approve order", {
-        description: err?.message || "Please try again.",
-      });
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  const handleReject = async (orderId: string) => {
-    setProcessingId(orderId);
-    try {
-      await rejectOrder(orderId);
-      toast("Order rejected");
-    } catch (err: any) {
-      toast("Failed to reject order", {
-        description: err?.message || "Please try again.",
-      });
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <Panel>
-        <PanelHead
-          title="Pending Orders"
-          description={`${pendingOrders.length} order(s) awaiting approval`}
-        >
-          <button className={btn} onClick={refreshData}>
-            <RefreshCw className="size-4" />
-            Refresh
-          </button>
-        </PanelHead>
-
-        {pendingOrders.length > 0 ? (
-          <div className="space-y-4">
-            {pendingOrders.map((order) => {
-              const targetBranch = branches.find(
-                (b) => getBranchUuid(b.id) === order.target_branch_id,
-              );
-              const targetName = targetBranch?.name || "Unknown";
-              const requester = order.requested_by;
-
-              const itemsByWarehouse: Record<string, typeof order.items> = {};
-              order.items?.forEach((item) => {
-                const warehouse = branches.find(
-                  (b) => getBranchUuid(b.id) === item.source_branch_id,
-                );
-                const key = warehouse?.name || item.source_branch_id;
-                if (!itemsByWarehouse[key]) itemsByWarehouse[key] = [];
-                itemsByWarehouse[key].push(item);
-              });
-
-              return (
-                <div key={order.id} className="border border-border rounded-lg p-4 bg-card">
-                  <div className="flex flex-wrap justify-between items-start gap-2">
-                    <div>
-                      <div className="text-sm font-medium">Request for {targetName}</div>
-                      <div className="text-xs text-muted-foreground">
-                        From: {requester} · {new Date(order.created_at).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        className={cn(btnPrimary, "bg-emerald-600 hover:bg-emerald-700")}
-                        onClick={() => handleApprove(order.id)}
-                        disabled={processingId === order.id}
-                      >
-                        <Check className="size-4" />
-                        Approve
-                      </button>
-                      <button
-                        className={cn(btn, "border-red-300 text-red-600 hover:bg-red-50")}
-                        onClick={() => handleReject(order.id)}
-                        disabled={processingId === order.id}
-                      >
-                        <X className="size-4" />
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-2">
-                    {Object.entries(itemsByWarehouse).map(([warehouseName, items]) => (
-                      <div key={warehouseName} className="text-sm">
-                        <span className="font-medium">{warehouseName}</span>
-                        <ul className="list-disc list-inside ml-4 text-muted-foreground">
-                          {items?.map((item, i) => (
-                            <li key={i}>
-                              {item.sku} × {item.quantity}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-
-                  {order.notes && (
-                    <div className="mt-2 text-xs text-muted-foreground border-t border-border/50 pt-2">
-                      Note: {order.notes}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <EmptyState title="No pending orders" copy="All stock requests have been processed." />
-        )}
-      </Panel>
-
-      <Panel>
-        <PanelHead title="Order History" description="All requests processed" />
-        {orders.length > 0 ? (
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {orders
-              .filter((o) => o.status !== "pending")
-              .map((order) => {
-                const targetBranch = branches.find(
-                  (b) => getBranchUuid(b.id) === order.target_branch_id,
-                );
-                const targetName = targetBranch?.name || "Unknown";
-                return (
-                  <div
-                    key={order.id}
-                    className="flex justify-between items-center border-b border-border/50 py-2 text-sm"
-                  >
-                    <div>
-                      <span className="font-medium">{targetName}</span>
-                      <span className="text-muted-foreground ml-2">
-                        {new Date(order.created_at).toLocaleDateString()}
-                      </span>
-                      {order.items && (
-                        <span className="text-muted-foreground ml-2">
-                          ({order.items.length} items)
-                        </span>
-                      )}
-                    </div>
-                    <Pill
-                      tone={
-                        order.status === "fulfilled"
-                          ? "ok"
-                          : order.status === "rejected"
-                            ? "low"
-                            : "neutral"
-                      }
-                    >
-                      {order.status}
-                    </Pill>
-                  </div>
-                );
-              })}
-          </div>
-        ) : (
-          <EmptyState title="No history yet" copy="Processed orders will appear here." />
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-/* ---------------- FINAL EXPORTS ---------------- */
-
-export {
-  OverviewSection,
-  PosSection,
-  WarehouseSection, // renamed from InventorySection
-  ExpensesSection,
-  StaffSection,
-  ReportsSection,
-  ReturnsSection,
-  SalesSection,
-  SettingsSection,
-  StockRequestSection,
-  PendingOrdersSection,
-};
