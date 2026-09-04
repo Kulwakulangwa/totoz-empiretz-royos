@@ -19,9 +19,8 @@ const iconMap: Record<string, string> = {
   pos: "🛍️",
   sales: "📋",
   returns: "🔄",
-  warehouse: "🏪",
-  "stock-requests": "📦",
-  "pending-orders": "⏳",
+  inventory: "📦",
+  stocking: "🚚",
   expenses: "💰",
   staff: "👥",
   reports: "📈",
@@ -42,7 +41,7 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
 
   // Update pending count when orders change
   useEffect(() => {
-    const count = orders.filter(o => o.status === "pending").length;
+    const count = orders.filter((o) => o.status === "pending").length;
     setPendingCount(count);
   }, [orders]);
 
@@ -96,7 +95,7 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
     }
   } else {
     // Fallback: use default nav
-    visibleNav = isOwner ? navItems : navItems.filter(item => !item.ownerOnly);
+    visibleNav = isOwner ? navItems : navItems.filter((item) => !item.ownerOnly);
   }
 
   return (
@@ -118,7 +117,10 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
 
       {/* Branch */}
       <div className="px-4 py-3 border-b border-[#F0EEF4]">
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: colors.tealLight }}>
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg"
+          style={{ background: colors.tealLight }}
+        >
           <span className="text-sm">🏪</span>
           <span className="text-sm font-medium truncate" style={{ color: colors.textDark }}>
             {branchName}
@@ -145,12 +147,10 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
           return (
             <button
               key={item.id}
-              onClick={() => onSection(item.id)}
+              onClick={() => onSection(item.id as SectionId)}
               className={cn(
                 "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative",
-                isActive
-                  ? "text-white shadow-sm"
-                  : "hover:bg-[#F7F7FA]"
+                isActive ? "text-white shadow-sm" : "hover:bg-[#F7F7FA]",
               )}
               style={{
                 background: isActive ? colors.primary : "transparent",

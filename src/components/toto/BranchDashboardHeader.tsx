@@ -5,8 +5,8 @@ import { ArrowLeft, LogOut, Bell, Search } from "lucide-react";
 interface BranchDashboardHeaderProps {
   branchName: string;
   branchId: BranchId;
-  userEmail?: string;
-  role?: string;
+  userEmail?: string | undefined;
+  role?: string | undefined;
   onSwitchBranch: () => void;
   onLogout: () => void;
   canSwitchBranch?: boolean;

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { getBranchIdFromUuid } from "@/lib/toto-data";
 
 export type AppRole = "owner" | "manager" | "cashier";
 
@@ -75,11 +74,7 @@ export function useAuth() {
 
         if (active) {
           if (data) {
-            const rawBranchId = data.branch_id;
-            const normalizedBranchId =
-              typeof rawBranchId === "string" && rawBranchId.length > 20
-                ? getBranchIdFromUuid(rawBranchId)
-                : rawBranchId || "toto";
+            const normalizedBranchId = data.branch_id;
 
             if (!data.is_active) {
               setError("Your account has been deactivated.");
@@ -178,11 +173,7 @@ export function useAuth() {
 
       if (error) throw error;
       if (data) {
-        const rawBranchId = data.branch_id;
-        const normalizedBranchId =
-          typeof rawBranchId === "string" && rawBranchId.length > 20
-            ? getBranchIdFromUuid(rawBranchId)
-            : rawBranchId || "toto";
+        const normalizedBranchId = data.branch_id;
 
         setStaffProfile({
           ...data,

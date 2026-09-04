@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      branches: {
+        Row: { id: string; name: string; code: string; location_type: Database["public"]["Enums"]["location_type"]; address: string | null; phone: string | null; is_active: boolean; created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; name: string; code: string; location_type?: Database["public"]["Enums"]["location_type"]; address?: string | null; phone?: string | null; is_active?: boolean; created_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; name?: string; code?: string; location_type?: Database["public"]["Enums"]["location_type"]; address?: string | null; phone?: string | null; is_active?: boolean; created_by?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      catalog_products: {
+        Row: { id: string; sku: string; barcode: string | null; name: string; category: string | null; unit: string; selling_price: number; description: string | null; image_path: string | null; is_active: boolean; created_in_warehouse_id: string | null; created_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; sku: string; barcode?: string | null; name: string; category?: string | null; unit?: string; selling_price?: number; description?: string | null; image_path?: string | null; is_active?: boolean; created_in_warehouse_id?: string | null; created_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { id?: string; sku?: string; barcode?: string | null; name?: string; category?: string | null; unit?: string; selling_price?: number; description?: string | null; image_path?: string | null; is_active?: boolean; created_in_warehouse_id?: string | null; created_by?: string | null; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
+      inventory_balances: {
+        Row: { location_id: string; product_id: string; quantity: number; average_unit_cost: number; min_stock: number; updated_at: string }
+        Insert: { location_id: string; product_id: string; quantity?: number; average_unit_cost?: number; min_stock?: number; updated_at?: string }
+        Update: { location_id?: string; product_id?: string; quantity?: number; average_unit_cost?: number; min_stock?: number; updated_at?: string }
+        Relationships: []
+      }
+      inventory_movements: {
+        Row: { id: string; location_id: string; product_id: string; movement_type: string; quantity_delta: number; unit_cost: number; reference_type: string | null; reference_id: string | null; notes: string | null; created_by: string | null; created_at: string }
+        Insert: { id?: string; location_id: string; product_id: string; movement_type: string; quantity_delta: number; unit_cost?: number; reference_type?: string | null; reference_id?: string | null; notes?: string | null; created_by?: string | null; created_at?: string }
+        Update: { id?: string; location_id?: string; product_id?: string; movement_type?: string; quantity_delta?: number; unit_cost?: number; reference_type?: string | null; reference_id?: string | null; notes?: string | null; created_by?: string | null; created_at?: string }
+        Relationships: []
+      }
+      stock_orders: {
+        Row: { id: string; order_number: string; destination_shop_id: string; idempotency_key: string; status: Database["public"]["Enums"]["stock_order_status"]; created_by: string; created_at: string; completed_at: string; reversed_by: string | null; reversed_at: string | null; reversal_reason: string | null }
+        Insert: { id?: string; order_number: string; destination_shop_id: string; idempotency_key: string; status?: Database["public"]["Enums"]["stock_order_status"]; created_by: string; created_at?: string; completed_at?: string; reversed_by?: string | null; reversed_at?: string | null; reversal_reason?: string | null }
+        Update: { id?: string; order_number?: string; destination_shop_id?: string; idempotency_key?: string; status?: Database["public"]["Enums"]["stock_order_status"]; created_by?: string; created_at?: string; completed_at?: string; reversed_by?: string | null; reversed_at?: string | null; reversal_reason?: string | null }
+        Relationships: []
+      }
+      stock_order_items: {
+        Row: { id: string; order_id: string; product_id: string; total_quantity: number }
+        Insert: { id?: string; order_id: string; product_id: string; total_quantity: number }
+        Update: { id?: string; order_id?: string; product_id?: string; total_quantity?: number }
+        Relationships: []
+      }
+      stock_allocations: {
+        Row: { id: string; order_item_id: string; warehouse_id: string; quantity: number; unit_cost_snapshot: number }
+        Insert: { id?: string; order_item_id: string; warehouse_id: string; quantity: number; unit_cost_snapshot: number }
+        Update: { id?: string; order_item_id?: string; warehouse_id?: string; quantity?: number; unit_cost_snapshot?: number }
+        Relationships: []
+      }
+      warehouse_receipts: {
+        Row: { id: string; receipt_number: string; warehouse_id: string; created_by: string; notes: string | null; created_at: string }
+        Insert: { id?: string; receipt_number: string; warehouse_id: string; created_by: string; notes?: string | null; created_at?: string }
+        Update: { id?: string; receipt_number?: string; warehouse_id?: string; created_by?: string; notes?: string | null; created_at?: string }
+        Relationships: []
+      }
+      warehouse_receipt_items: {
+        Row: { id: string; receipt_id: string; product_id: string; quantity: number; unit_cost: number }
+        Insert: { id?: string; receipt_id: string; product_id: string; quantity: number; unit_cost: number }
+        Update: { id?: string; receipt_id?: string; product_id?: string; quantity?: number; unit_cost?: number }
+        Relationships: []
+      }
       activity_logs: {
         Row: {
           id: string
@@ -169,11 +223,13 @@ export type Database = {
           id: string
           sale_id: string
           product_id: string | null
+          catalog_product_id: string | null
           product_name: string
           sku: string | null
           barcode: string | null
           quantity: number
           unit_price: number
+          unit_cost: number
           total_price: number
           created_at: string
         }
@@ -181,11 +237,13 @@ export type Database = {
           id?: string
           sale_id: string
           product_id?: string | null
+          catalog_product_id?: string | null
           product_name: string
           sku?: string | null
           barcode?: string | null
           quantity: number
           unit_price: number
+          unit_cost?: number
           total_price: number
           created_at?: string
         }
@@ -193,11 +251,13 @@ export type Database = {
           id?: string
           sale_id?: string
           product_id?: string | null
+          catalog_product_id?: string | null
           product_name?: string
           sku?: string | null
           barcode?: string | null
           quantity?: number
           unit_price?: number
+          unit_cost?: number
           total_price?: number
           created_at?: string
         }
@@ -329,7 +389,10 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      warehouse_availability: {
+        Row: { warehouse_id: string | null; warehouse_name: string | null; product_id: string | null; sku: string | null; barcode: string | null; product_name: string | null; category: string | null; unit: string | null; selling_price: number | null; image_path: string | null; quantity: number | null }
+        Relationships: []
+      }
     }
     Functions: {
       decrement_product_quantity: {
@@ -354,9 +417,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      create_stock_order: { Args: { _destination_shop_id: string; _idempotency_key: string; _allocations: Json }; Returns: string }
+      reverse_stock_order: { Args: { _order_id: string; _reason: string }; Returns: undefined }
+      receive_warehouse_stock: { Args: { _warehouse_id: string; _product_id: string; _quantity: number; _unit_cost: number; _notes?: string | null }; Returns: string }
+      receive_new_warehouse_product: { Args: { _warehouse_id: string; _name: string; _sku: string; _barcode: string | null; _category: string | null; _unit: string; _selling_price: number; _quantity: number; _unit_cost: number; _notes?: string | null }; Returns: string }
+      create_shop_sale: { Args: { _shop_id: string; _payment_method: string; _lines: Json }; Returns: string }
+      restock_shop_inventory: { Args: { _shop_id: string; _product_id: string; _quantity: number; _reference_id?: string | null }; Returns: undefined }
+      adjust_warehouse_inventory: { Args: { _warehouse_id: string; _product_id: string; _quantity_delta: number; _reason: string }; Returns: undefined }
     }
     Enums: {
       app_role: "owner" | "manager" | "cashier"
+      location_type: "shop" | "warehouse"
+      stock_order_status: "completed" | "reversed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -485,6 +557,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "manager", "cashier"],
+      location_type: ["shop", "warehouse"],
+      stock_order_status: ["completed", "reversed"],
     },
   },
 } as const
