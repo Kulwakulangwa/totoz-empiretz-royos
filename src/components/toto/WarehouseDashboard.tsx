@@ -9,6 +9,7 @@ import {
   loadCatalog,
   loadWarehouseInventory,
   loadWarehouseReceipts,
+  loadWarehouseOrders, // Added this import
   receiveWarehouseStock,
   receiveNewWarehouseProduct,
   adjustWarehouseInventory,
@@ -16,19 +17,12 @@ import {
   type InventoryBalance,
   type Location,
   type WarehouseReceipt,
+  type WarehouseOrderView, // Added this import
 } from "@/lib/inventory";
 import { supabase } from "@/integrations/supabase/client";
 import { compressProductImage } from "@/lib/product-images";
 
 type View = "overview" | "inventory" | "receive" | "orders" | "settings";
-type ServedAllocation = {
-  id: string;
-  quantity: number;
-  stock_order_items?: {
-    stock_orders?: { order_number: string; status: "completed" | "reversed" };
-    catalog_products?: { name: string };
-  };
-};
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Please try again.";
 type Props = {
@@ -42,7 +36,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
   const [view, setView] = useState<View>("overview");
   const [inventory, setInventory] = useState<InventoryBalance[]>([]);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
-  const [served, setServed] = useState<ServedAllocation[]>([]);
+  const [served, setServed] = useState<WarehouseOrderView[]>([]);
   const [receipts, setReceipts] = useState<WarehouseReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [productId, setProductId] = useState("");
@@ -72,19 +66,12 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         loadWarehouseInventory(warehouse.id),
         loadCatalog(),
         loadWarehouseReceipts(warehouse.id),
-        supabase
-          .from("stock_allocations")
-          .select(
-            `id,order_item_id,warehouse_id,quantity,stock_order_items(*, catalog_products(*), stock_orders(*))`,
-          )
-          .eq("warehouse_id", warehouse.id)
-          .order("id", { ascending: false }),
+        loadWarehouseOrders(warehouse.id), // Updated to use the new function
       ]);
       setInventory(balances);
       setCatalog(products);
       setReceipts(receiptRows);
-      if (allocations.error) throw allocations.error;
-      setServed((allocations.data ?? []) as unknown as ServedAllocation[]);
+      setServed(allocations);
     } catch (error: unknown) {
       toast("Could not load warehouse", { description: errorMessage(error) });
     } finally {
@@ -101,8 +88,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
       units: inventory.reduce((sum, row) => sum + row.quantity, 0),
       skus: inventory.filter((row) => row.quantity > 0).length,
       low: inventory.filter((row) => row.quantity <= row.min_stock).length,
-      served: served.filter((row) => row.stock_order_items?.stock_orders?.status === "completed")
-        .length,
+      served: served.filter((row) => row.status === "completed").length,
     }),
     [inventory, served],
   );
@@ -140,7 +126,6 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
           return;
         }
         
-        // 1. Upload image if selected
         let imagePath: string | null = null;
         if (imageFile) {
           const safeSku = productForm.sku.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-");
@@ -154,7 +139,6 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
           imagePath = path;
         }
 
-        // 2. Call the RPC with the image path
         await receiveNewWarehouseProduct(
           warehouse.id,
           {
@@ -172,6 +156,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         );
         selectedId = "";
       }
+      
       if (!newProduct) {
         if (!selectedId) {
           toast("Select a product.");
@@ -179,6 +164,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         }
         await receiveWarehouseStock(warehouse.id, selectedId, qty, unitCost, notes);
       }
+      
       toast("Warehouse stock received");
       setProductId("");
       setQuantity("");
@@ -367,7 +353,6 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                     <div className="grid gap-3 sm:grid-cols-2">
                       {newProduct ? (
                         <>
-                          {/* Image Uploader */}
                           <div className="sm:col-span-2">
                             <span className="text-xs font-medium text-slate-600">Product Image</span>
                             <div className="mt-1 flex items-center gap-3 rounded-lg border bg-white p-3">
@@ -491,24 +476,26 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                     <div className="grid gap-3">
                       {served.map((row) => (
                         <div
-                          key={row.id}
+                          key={row.allocation_id}
                           className="flex flex-wrap justify-between gap-3 rounded-xl border bg-white p-4"
                         >
                           <div>
-                            <strong>{row.stock_order_items?.stock_orders?.order_number}</strong>
-                            <p className="text-xs text-slate-500">
-                              {row.stock_order_items?.catalog_products?.name}
+                            <strong>{row.order_number}</strong>
+                            <p className="text-xs text-slate-500">{row.product_name}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Requested by <span className="font-semibold text-slate-700">{row.created_by_name}</span> for{" "}
+                              <span className="font-semibold text-slate-700">{row.destination_shop_name}</span>
                             </p>
                           </div>
                           <div className="text-right">
                             <Pill
                               tone={
-                                row.stock_order_items?.stock_orders?.status === "completed"
+                                row.status === "completed"
                                   ? "ok"
                                   : "neutral"
                               }
                             >
-                              {row.stock_order_items?.stock_orders?.status}
+                              {row.status}
                             </Pill>
                             <p className="mt-1 text-sm font-semibold">{row.quantity} units</p>
                           </div>
