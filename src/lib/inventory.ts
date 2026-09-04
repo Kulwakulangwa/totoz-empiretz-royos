@@ -36,7 +36,7 @@ export type InventoryBalance = {
   catalog_products?: CatalogProduct;
 };
 
-// SECURE TYPE: No buying price or cost included here!
+// SECURE TYPE: No buying price included
 export type WarehouseAvailability = {
   warehouse_id: string;
   warehouse_name: string;
@@ -51,11 +51,24 @@ export type WarehouseAvailability = {
   quantity: number;
 };
 
+// NEW TYPE: For the Served Orders View with Shop and User Name
+export type WarehouseOrderView = {
+  allocation_id: string;
+  warehouse_id: string;
+  order_id: string;
+  order_number: string;
+  status: "completed" | "reversed";
+  created_at: string;
+  destination_shop_name: string;
+  created_by_name: string;
+  product_name: string;
+  quantity: number;
+};
+
 export type StockAllocation = {
   id: string;
   warehouse_id: string;
   quantity: number;
-  // unit_cost_snapshot removed so it's not exposed
   branches?: { name: string };
 };
 
@@ -153,11 +166,21 @@ export function useLocations(includeArchived = false) {
   return { locations, loading, error, refresh, createLocation, updateLocation };
 }
 
-// Uses the secure view so Cashiers don't see costs
 export async function loadWarehouseAvailability(): Promise<WarehouseAvailability[]> {
   const { data, error } = await db.from("cashier_stock_availability").select("*").order("product_name");
   if (error) throw error;
   return (data ?? []) as WarehouseAvailability[];
+}
+
+// NEW FUNCTION: Loads the joined view with Shop Name and User Name
+export async function loadWarehouseOrders(warehouseId: string): Promise<WarehouseOrderView[]> {
+  const { data, error } = await db
+    .from("warehouse_order_view")
+    .select("*")
+    .eq("warehouse_id", warehouseId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as WarehouseOrderView[];
 }
 
 export async function loadStockOrders(shopId: string): Promise<StockOrder[]> {
@@ -165,7 +188,7 @@ export async function loadStockOrders(shopId: string): Promise<StockOrder[]> {
     .from("stock_orders")
     .select(
       `
-    *, stock_order_items(*, catalog_products(*), stock_allocations(id, order_item_id, warehouse_id, quantity, branches(name)))
+    *, stock_order_items(*, catalog_products(*), stock_allocations(id,order_item_id,warehouse_id,quantity,branches(name)))
   `,
     )
     .eq("destination_shop_id", shopId)
@@ -241,7 +264,6 @@ export async function receiveWarehouseStock(
   return data as string;
 }
 
-// NOW INCLUDES _image_path for image uploads!
 export async function receiveNewWarehouseProduct(
   warehouseId: string,
   product: {
