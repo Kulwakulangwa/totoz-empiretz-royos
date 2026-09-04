@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Boxes, ClipboardCheck, LogOut, PackagePlus, Warehouse, ImagePlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppLogo } from "./AppLogo";
@@ -18,7 +18,7 @@ import {
   type WarehouseReceipt,
 } from "@/lib/inventory";
 import { supabase } from "@/integrations/supabase/client";
-import { compressProductImage } from "@/lib/product-images"; // Assuming this exists
+import { compressProductImage } from "@/lib/product-images";
 
 type View = "overview" | "inventory" | "receive" | "orders" | "settings";
 type ServedAllocation = {
@@ -96,12 +96,23 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     void refresh();
   }, [refresh]);
 
+  const metrics = useMemo(
+    () => ({
+      units: inventory.reduce((sum, row) => sum + row.quantity, 0),
+      skus: inventory.filter((row) => row.quantity > 0).length,
+      low: inventory.filter((row) => row.quantity <= row.min_stock).length,
+      served: served.filter((row) => row.stock_order_items?.stock_orders?.status === "completed")
+        .length,
+    }),
+    [inventory, served],
+  );
+
   // Image Upload Logic
   const handleImageSelect = async (file?: File) => {
     if (!file) return;
     try {
       const compressed = await compressProductImage(file); 
-      setImageFile(compressed.blob as File); // Assuming compressProductImage returns an object with blob
+      setImageFile(compressed.blob as File); 
       setImagePreview(compressed.previewUrl || URL.createObjectURL(file));
     } catch (error) {
       toast("Image could not be processed", { description: errorMessage(error) });
@@ -153,7 +164,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
             category: productForm.category.trim() || null,
             unit: productForm.unit.trim() || "pcs",
             selling_price: Number(productForm.selling_price) || 0,
-            image_path: imagePath, // Pass the path here
+            image_path: imagePath,
           },
           qty,
           unitCost,
