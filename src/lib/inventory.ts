@@ -36,7 +36,7 @@ export type InventoryBalance = {
   catalog_products?: CatalogProduct;
 };
 
-//  - UPDATED: Removed all cost references!
+// SECURE TYPE: No buying price or cost included here!
 export type WarehouseAvailability = {
   warehouse_id: string;
   warehouse_name: string;
@@ -153,7 +153,7 @@ export function useLocations(includeArchived = false) {
   return { locations, loading, error, refresh, createLocation, updateLocation };
 }
 
-// - FIXED: Now queries the safe cashier view
+// Uses the secure view so Cashiers don't see costs
 export async function loadWarehouseAvailability(): Promise<WarehouseAvailability[]> {
   const { data, error } = await db.from("cashier_stock_availability").select("*").order("product_name");
   if (error) throw error;
@@ -241,6 +241,7 @@ export async function receiveWarehouseStock(
   return data as string;
 }
 
+// NOW INCLUDES _image_path for image uploads!
 export async function receiveNewWarehouseProduct(
   warehouseId: string,
   product: {
@@ -250,6 +251,7 @@ export async function receiveNewWarehouseProduct(
     category: string | null;
     unit: string;
     selling_price: number;
+    image_path: string | null;
   },
   quantity: number,
   unitCost: number,
@@ -266,6 +268,7 @@ export async function receiveNewWarehouseProduct(
     _quantity: quantity,
     _unit_cost: unitCost,
     _notes: notes || null,
+    _image_path: product.image_path,
   });
   if (error) throw error;
   return data as string;
