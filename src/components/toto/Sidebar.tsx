@@ -26,11 +26,14 @@ type Props = {
 
 export function Sidebar({ shop, section, isOwner, onSection }: Props) {
   const { signOut } = useAuth();
+  
+  // FIXED: Added 'stocking' to the non-owner list so Cashiers can see it
   const visibleNav = isOwner
     ? navItems
     : [
         { id: "pos", label: "Point of Sale", ownerOnly: false, icon: "🛍️" },
         { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
+        { id: "stocking", label: "Stock Requests", ownerOnly: false, icon: "🚚" },
       ];
 
   const branchName = branchLabel(shop);
