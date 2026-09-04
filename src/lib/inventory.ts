@@ -191,6 +191,7 @@ export async function reverseStockOrder(orderId: string, reason: string) {
 }
 
 export async function loadWarehouseInventory(warehouseId: string): Promise<InventoryBalance[]> {
+  // Ensure warehouseId is a UUID
   const { data, error } = await db
     .from("inventory_balances")
     .select("*, catalog_products(*)")
@@ -221,18 +222,8 @@ export async function loadWarehouseReceipts(warehouseId: string): Promise<Wareho
   return (data ?? []) as unknown as WarehouseReceipt[];
 }
 
-export async function createCatalogProduct(
-  input: Omit<CatalogProduct, "id" | "image_path" | "is_active">,
-  warehouseId: string,
-) {
-  const { data, error } = await db
-    .from("catalog_products")
-    .insert({ ...input, created_in_warehouse_id: warehouseId })
-    .select()
-    .single();
-  if (error) throw error;
-  return data as CatalogProduct;
-}
+// ⚠️ DELETED createCatalogProduct because it relies on direct INSERT which is revoked in your SQL!
+// Use receiveNewWarehouseProduct RPC instead.
 
 export async function receiveWarehouseStock(
   warehouseId: string,
