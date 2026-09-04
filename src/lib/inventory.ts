@@ -36,6 +36,7 @@ export type InventoryBalance = {
   catalog_products?: CatalogProduct;
 };
 
+//  - UPDATED: Removed all cost references!
 export type WarehouseAvailability = {
   warehouse_id: string;
   warehouse_name: string;
@@ -54,7 +55,7 @@ export type StockAllocation = {
   id: string;
   warehouse_id: string;
   quantity: number;
-  unit_cost_snapshot?: number;
+  // unit_cost_snapshot removed so it's not exposed
   branches?: { name: string };
 };
 
@@ -152,8 +153,9 @@ export function useLocations(includeArchived = false) {
   return { locations, loading, error, refresh, createLocation, updateLocation };
 }
 
+// - FIXED: Now queries the safe cashier view
 export async function loadWarehouseAvailability(): Promise<WarehouseAvailability[]> {
-  const { data, error } = await db.from("warehouse_availability").select("*").order("product_name");
+  const { data, error } = await db.from("cashier_stock_availability").select("*").order("product_name");
   if (error) throw error;
   return (data ?? []) as WarehouseAvailability[];
 }
@@ -163,7 +165,7 @@ export async function loadStockOrders(shopId: string): Promise<StockOrder[]> {
     .from("stock_orders")
     .select(
       `
-    *, stock_order_items(*, catalog_products(*), stock_allocations(id,order_item_id,warehouse_id,quantity,branches(name)))
+    *, stock_order_items(*, catalog_products(*), stock_allocations(id, order_item_id, warehouse_id, quantity, branches(name)))
   `,
     )
     .eq("destination_shop_id", shopId)
@@ -191,7 +193,6 @@ export async function reverseStockOrder(orderId: string, reason: string) {
 }
 
 export async function loadWarehouseInventory(warehouseId: string): Promise<InventoryBalance[]> {
-  // Ensure warehouseId is a UUID
   const { data, error } = await db
     .from("inventory_balances")
     .select("*, catalog_products(*)")
@@ -221,9 +222,6 @@ export async function loadWarehouseReceipts(warehouseId: string): Promise<Wareho
   if (error) throw error;
   return (data ?? []) as unknown as WarehouseReceipt[];
 }
-
-// ⚠️ DELETED createCatalogProduct because it relies on direct INSERT which is revoked in your SQL!
-// Use receiveNewWarehouseProduct RPC instead.
 
 export async function receiveWarehouseStock(
   warehouseId: string,
