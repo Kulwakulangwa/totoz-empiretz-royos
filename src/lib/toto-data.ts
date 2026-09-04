@@ -130,7 +130,8 @@ export const navItems: NavItem[] = [
   { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
   { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
   { id: "inventory", label: "Goods", ownerOnly: true, icon: "📦" },
-  { id: "stocking", label: "Stocking", ownerOnly: true, icon: "🚚" },
+  // FIXED: Set to false so cashiers can access it
+  { id: "stocking", label: "Stocking", ownerOnly: false, icon: "🚚" }, 
   { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
   { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
   { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
