@@ -10,6 +10,7 @@ const iconMap: Record<string, string> = {
   sales: "📋",
   returns: "🔄",
   inventory: "📦",
+  stocking: "🚚",
   expenses: "💰",
   staff: "👥",
   reports: "📈",
@@ -68,7 +69,7 @@ export function Sidebar({ shop, section, isOwner, onSection }: Props) {
           return (
             <button
               key={item.id}
-              onClick={() => onSection(item.id)}
+              onClick={() => onSection(item.id as SectionId)}
               className={cn(
                 "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200",
                 isActive

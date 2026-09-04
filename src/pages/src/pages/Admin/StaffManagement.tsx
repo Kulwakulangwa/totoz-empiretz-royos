@@ -22,7 +22,7 @@ export function StaffManagement() {
   // Fetch branches on mount
   useState(() => {
     const fetchBranches = async () => {
-      const { data } = await supabase.from("branches").select("id, name");
+      const { data } = await supabase.from("branches").select("id, name").eq("location_type", "shop").eq("is_active", true);
       if (data) setBranches(data);
     };
     fetchBranches();

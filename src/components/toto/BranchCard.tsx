@@ -26,8 +26,8 @@ export function BranchCard({
   return (
     <CourseDesignCard
       title={name}
-      role={role}
-      isSelected={isSelected}
+      {...(role === undefined ? {} : { role })}
+      {...(isSelected === undefined ? {} : { isSelected })}
       onClick={onClick}
       metrics={[
         { label: "Revenue", value: money(revenue) },

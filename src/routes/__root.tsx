@@ -82,7 +82,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Retail management system for Totoz Empire: five branches, POS, inventory, expenses and owner reporting.",
+          "Retail management system for Totoz Empire: shops, warehouses, stocking, POS, inventory, expenses and owner reporting.",
       },
       { name: "author", content: "Totoz Empire" },
       { property: "og:title", content: "Totoz Empire Retail Management System" },

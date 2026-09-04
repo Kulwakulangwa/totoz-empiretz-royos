@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getBranchIdFromUuid, getBranchUuid, shopIds, type ShopId } from "@/lib/toto-data";
+import { getBranchUuid } from "@/lib/toto-data";
 
 export type StaffAccount = {
   id: string;
@@ -18,10 +18,7 @@ type ActorProfile = {
   branchId: string;
 };
 
-const branchSchema = z.custom<ShopId>(
-  (value) => typeof value === "string" && shopIds.includes(value as ShopId),
-  "Invalid branch",
-);
+const branchSchema = z.string().uuid("Invalid shop branch");
 
 async function getActorProfile(context: any): Promise<ActorProfile> {
   const { supabase, userId } = context;
@@ -85,7 +82,7 @@ export const listStaff = createServerFn({ method: "GET" })
       id: s.id,
       email: s.email,
       fullName: s.full_name,
-      branch: getBranchIdFromUuid(s.branch_id),
+      branch: s.branch_id,
       role: s.role,
       createdAt: s.created_at,
       isActive: s.is_active,

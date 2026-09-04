@@ -22,7 +22,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  branches,
   expenseCategories,
   money,
   reports,
@@ -45,7 +44,6 @@ export const btnPrimary =
 const field =
   "min-h-9 w-full rounded-md border border-border bg-card px-3 text-[13px] outline-none focus:border-ring focus:ring-2 focus:ring-ring/20";
 
-const realBranches = branches.slice(1);
 
 const normalizeBarcodeToken = (value: string) =>
   value.trim().replace(/[\s_-]+/g, "").toUpperCase();
@@ -64,7 +62,7 @@ function ProductThumb({
   alt,
   className,
 }: {
-  src?: string | null;
+  src?: string | null | undefined;
   alt: string;
   className?: string;
 }) {
@@ -92,6 +90,8 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
 
   const filteredSales = shop === "all" ? sales : sales.filter(s => s.branch === shop);
   const filteredExpenses = shop === "all" ? expenses : expenses.filter(e => e.branch === shop);
+  const performanceBranches = [...new Set(filteredSales.map((sale) => sale.branch))]
+    .map((id) => ({ id, name: branchLabel(id) }));
 
   const grossRevenue = filteredSales.reduce((sum, s) => sum + s.total, 0);
   const vat = filteredSales.reduce((sum, s) => sum + s.vat, 0);
@@ -164,7 +164,7 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
             Sales and margin comparison for {scopedName}.
           </p>
           <div className="mt-4 space-y-3">
-            {realBranches.map((b) => {
+            {performanceBranches.map((b) => {
               const branchSales = sales.filter((s) => s.branch === b.id);
               const rev = branchSales.reduce((sum, s) => sum + s.total, 0);
               const profitMargin = branchSales.reduce((sum, s) => sum + s.total - s.cost, 0);
@@ -231,7 +231,7 @@ export function OverviewSection({ shop }: { shop: BranchId }) {
 
 /* ---------------- Point of sale ---------------- */
 
-type CartItem = SaleLine & { stock: number; imageUrl?: string | null };
+type CartItem = SaleLine & { stock: number; imageUrl?: string | null | undefined };
 
 export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const { products, recordSale, receipt } = useToto();
@@ -290,6 +290,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         : [
             ...prev,
             {
+              productId: item.id,
               sku: item.sku,
               name: item.name,
               qty: 1,
@@ -772,7 +773,7 @@ const stockLabel = (p: Product, shop?: BranchId) => {
   return parts.length ? parts.join(" · ") : "No stock yet";
 };
 
-export function InventorySection({ shop }: { shop: BranchId }) {
+export function InventorySection({ shop, readOnly = true }: { shop: BranchId; readOnly?: boolean }) {
   const { products, addProduct, updateProduct, removeProduct, adjustStock } = useToto();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -931,8 +932,9 @@ export function InventorySection({ shop }: { shop: BranchId }) {
     <Panel>
       <PanelHead
         title="Inventory"
-        description="One product identity per shop, with stock tracked for this branch."
+        description={readOnly ? "Shop stock is replenished through Stocking orders." : "Stock tracked for this location."}
       >
+        {!readOnly && <>
         <button
           className={btn}
           onClick={() => {
@@ -953,6 +955,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
         <button className={btnPrimary} onClick={openNew}>
           New product
         </button>
+        </>}
       </PanelHead>
       {rows.length ? (
         <div className="overflow-x-auto">
@@ -1015,13 +1018,13 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                         >
                           QR
                         </button>
-                        <button
+                        {!readOnly && <button
                           className="text-[12px] font-medium text-muted-foreground hover:text-foreground"
                           onClick={() => openEdit(p)}
                         >
                           Edit
-                        </button>
-                        <button
+                        </button>}
+                        {!readOnly && <button
                           className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
                           onClick={() => {
                             removeProduct(p.sku, p.branch);
@@ -1029,7 +1032,7 @@ export function InventorySection({ shop }: { shop: BranchId }) {
                           }}
                         >
                           Delete
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>
@@ -1382,7 +1385,7 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
                     <td className="px-2.5 py-3">
                       <button
                         className="text-[12px] font-medium text-muted-foreground hover:text-destructive"
-                        onClick={() => removeExpense(e.index)}
+                        onClick={() => removeExpense(e.id)}
                       >
                         Delete
                       </button>
@@ -1485,6 +1488,7 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
                   return;
                 }
                 addExpense({
+                  id: crypto.randomUUID(),
                   date: form.date,
                   branch: fixedBranch,
                   category: form.category,

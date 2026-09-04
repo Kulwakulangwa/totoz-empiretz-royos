@@ -12,12 +12,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { compressProductImage } from "@/lib/product-images";
 import {
-  branches,
+  branchLabel as dataBranchLabel,
   shopIds,
   stockOf,
   INTERNAL_BARCODE_START,
   getBranchUuid,
-  getBranchIdFromUuid,
   type Activity,
   type BranchId,
   type Expense,
@@ -26,7 +25,7 @@ import {
   type Staff,
 } from "@/lib/toto-data";
 
-export type SaleLine = { sku: string; name: string; qty: number; sell: number; buy: number };
+export type SaleLine = { productId?: string | undefined; sku: string; name: string; qty: number; sell: number; buy: number };
 export type Sale = {
   id: string;
   receipt: number;
@@ -162,7 +161,7 @@ const StoreContext = createContext<Ctx | null>(null);
 const today = () => new Date().toISOString().slice(0, 10);
 const timeLabel = () =>
   new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
-export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
+export const branchLabel = dataBranchLabel;
 const PRODUCT_IMAGE_BUCKET = "product-images";
 
 const norm = (v: string) => v.trim().toLowerCase();
@@ -295,26 +294,29 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const userBranch = staffProfile?.branch_id;
       const userBranchUuid = userBranch ? getBranchUuid(userBranch) : null;
 
-      let productsQuery = supabase.from('products').select('*');
+      const db = supabase as any;
+      let productsQuery = db.from('inventory_balances').select('*, catalog_products(*)');
       if (!isOwner && userBranchUuid) {
-        productsQuery = productsQuery.eq('branch_id', userBranchUuid);
+        productsQuery = productsQuery.eq('location_id', userBranchUuid);
       }
 
       const { data: productsData, error: productsError } = await productsQuery;
       if (productsError) throw productsError;
 
-      const mappedProducts: Product[] = await Promise.all((productsData || []).map(async (p) => {
-        const branch = getBranchIdFromUuid(p.branch_id);
+      const mappedProducts: Product[] = await Promise.all((productsData || []).map(async (balance: any) => {
+        const p = balance.catalog_products;
+        const branch = balance.location_id;
         return {
+          id: p.id,
           branch,
           name: p.name,
           sku: p.sku,
           barcode: p.barcode || '',
           category: p.category || 'General',
-          buy: Number(p.buying_price) || 0,
+          buy: Number(balance.average_unit_cost) || 0,
           sell: Number(p.selling_price) || 0,
-          min: Number(p.min_stock) || 5,
-          stock: { [branch]: Number(p.quantity) || 0 } as Partial<Record<ShopId, number>>,
+          min: Number(balance.min_stock) || 0,
+          stock: { [branch]: Number(balance.quantity) || 0 } as Partial<Record<ShopId, number>>,
           imagePath: p.image_path || null,
           imageUrl: await productImageUrl(p.image_path || null),
         };
@@ -337,23 +339,24 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const mappedSales: Sale[] = (salesData || []).map(s => {
         const items = s.sale_items || [];
         const lines: SaleLine[] = items.map((item: any) => ({
+          productId: item.catalog_product_id || undefined,
           sku: item.sku || '',
           name: item.product_name,
           qty: item.quantity || 0,
           sell: Number(item.unit_price) || 0,
-          buy: Number(item.unit_price) * 0.7 || 0,
+          buy: Number(item.unit_cost) || 0,
         }));
 
         return {
           id: s.id,
-          receipt: parseInt(s.receipt_number?.replace('REC-', '') || '1'),
+          receipt: parseInt(s.receipt_number?.split('-').pop() || '1'),
           date: s.created_at?.split('T')[0] || today(),
-          branch: getBranchIdFromUuid(s.branch_id),
+          branch: s.branch_id,
           cashier: s.cashier_id || 'Unknown',
           payment: (s.payment_method as "Cash" | "Lipa Namba") || 'Cash',
           lines,
           total: Number(s.total) || 0,
-          cost: Number(s.subtotal) || 0,
+          cost: items.reduce((sum: number, item: any) => sum + Number(item.unit_cost || 0) * Number(item.quantity || 0), 0),
           vat: Number(s.tax) || 0,
         };
       });
@@ -369,12 +372,12 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const mappedExpenses: Expense[] = (expensesData || []).map(e => ({
         id: e.id,
         date: e.expense_date || today(),
-        branch: getBranchIdFromUuid(e.branch_id),
+        branch: e.branch_id,
         category: e.category,
         description: e.description || '',
         amount: Number(e.amount) || 0,
         note: e.description || '',
-        created_by: e.created_by || undefined,
+        ...(e.created_by ? { created_by: e.created_by } : {}),
       }));
 
       const newState: State = {
@@ -434,7 +437,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     let branch: ShopId = branchOverride || 'toto';
     if (!branchOverride) {
       const keys = Object.keys(input.stock) as ShopId[];
-      if (keys.length > 0) branch = keys[0];
+      if (keys.length > 0) branch = keys[0]!;
     }
 
     const others = ref.current.products.filter((p) => productBranch(p) === branch);
@@ -625,60 +628,29 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
     const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
     const receiptNumber = ref.current.receipt;
-    const cashierId = staffProfile?.id || user?.id || null;
     const paymentMethod = input.payment.toLowerCase() as "cash" | "lipa_namba";
 
     try {
-      const { data: saleData, error: saleError } = await supabase
-        .from('sales')
-        .insert({
-          receipt_number: `REC-${receiptNumber}`,
-          branch_id: getBranchUuid(branch),
-          cashier_id: cashierId,
-          payment_method: paymentMethod,
-          total: total,
-          subtotal: total,
-          tax: 0,
-          payment_status: 'completed',
-        })
-        .select()
-        .single();
+      if (input.lines.some((line) => !line.productId)) {
+        throw new Error("One or more products are missing their catalog identity. Refresh inventory and try again.");
+      }
+      const { data: saleId, error: saleError } = await (supabase as any).rpc('create_shop_sale', {
+        _shop_id: getBranchUuid(branch),
+        _payment_method: paymentMethod,
+        _lines: input.lines.map((line) => ({
+          productId: line.productId,
+          quantity: line.qty,
+          unitPrice: line.sell,
+        })),
+      });
 
       if (saleError) {
         console.error('Sale insert error:', saleError);
         throw saleError;
       }
 
-      for (const line of input.lines) {
-        const { error: itemError } = await supabase
-          .from('sale_items')
-          .insert({
-            sale_id: saleData.id,
-            product_name: line.name,
-            sku: line.sku,
-            quantity: line.qty,
-            unit_price: line.sell,
-            total_price: line.sell * line.qty,
-          });
-
-        if (itemError) {
-          console.error('Sale item insert error:', itemError);
-          throw itemError;
-        }
-
-        const { error: updateError } = await supabase.rpc('decrement_product_quantity_by_sku', {
-          product_sku: line.sku,
-          product_branch_id: getBranchUuid(branch),
-          quantity_to_decrement: line.qty,
-        });
-
-        if (updateError) {
-          console.error('Inventory update error:', updateError);
-        }
-      }
-
       const sale: Sale = {
-        id: saleData.id,
+        id: saleId,
         receipt: receiptNumber,
         date: today(),
         branch,
@@ -740,24 +712,17 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
 
     if (input.restock) {
       for (const line of lines) {
-        const { data: product } = await supabase
-          .from('products')
-          .select('quantity')
-          .eq('sku', line.sku)
-          .eq('branch_id', getBranchUuid(branch))
-          .single();
-
-        if (product) {
-          await supabase
-            .from('products')
-            .update({ quantity: (product.quantity || 0) + line.qty })
-            .eq('sku', line.sku)
-            .eq('branch_id', getBranchUuid(branch));
+        const product = ref.current.products.find((p) => p.sku === line.sku && productBranch(p) === branch);
+        if (product?.id) {
+          const { error } = await (supabase as any).rpc('restock_shop_inventory', {
+            _shop_id: getBranchUuid(branch), _product_id: product.id, _quantity: line.qty, _reference_id: sale.id,
+          });
+          if (error) throw error;
         }
       }
     }
 
-    commit(log(
+    commit((prev) => log(
       `Return CN-${String(entry.creditNote).padStart(4, "0")}`,
       `Receipt #${String(sale.receipt).padStart(4, "0")} · ${branchLabel(branch)} · ${lines.reduce((s, l) => s + l.qty, 0)} item(s) · TZS ${total.toLocaleString("en-US")}`,
     )({

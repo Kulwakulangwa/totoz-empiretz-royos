@@ -1,5 +1,5 @@
-export type ShopId = "toto" | "sunnozy-1" | "sunnozy-2" | "mimis" | "marc-urembo";
-export type BranchId = ShopId | "all";
+export type ShopId = string;
+export type BranchId = string;
 
 export const shopIds: ShopId[] = ["toto", "sunnozy-1", "sunnozy-2", "mimis", "marc-urembo"];
 
@@ -11,7 +11,11 @@ export const branches: { id: BranchId; name: string }[] = [
   { id: "marc-urembo", name: "Marc Urembo" },
 ];
 
-export const branchLabel = (id: BranchId) => branches.find((b) => b.id === id)?.name ?? id;
+const dynamicBranchLabels = new Map<string, string>();
+export const registerBranchLabels = (items: Array<{ id: string; name: string }>) => {
+  items.forEach((item) => dynamicBranchLabels.set(item.id, item.name));
+};
+export const branchLabel = (id: BranchId) => dynamicBranchLabels.get(id) ?? branches.find((b) => b.id === id)?.name ?? id;
 
 export const colors = {
   primary: "#5B3A96",
@@ -55,6 +59,7 @@ export const reports = [
 ];
 
 export type Product = {
+  id?: string;
   branch: ShopId;
   name: string;
   sku: string;
@@ -105,6 +110,7 @@ export type SectionId =
   | "sales"
   | "returns"
   | "inventory"
+  | "stocking"
   | "expenses"
   | "staff"
   | "reports"
@@ -116,6 +122,7 @@ export const navItems: NavItem[] = [
   { id: "sales", label: "Sales", ownerOnly: false, icon: "📋" },
   { id: "returns", label: "Returns", ownerOnly: false, icon: "🔄" },
   { id: "inventory", label: "Goods", ownerOnly: true, icon: "📦" },
+  { id: "stocking", label: "Stocking", ownerOnly: true, icon: "🚚" },
   { id: "expenses", label: "Expenses", ownerOnly: true, icon: "💰" },
   { id: "staff", label: "Staff", ownerOnly: true, icon: "👥" },
   { id: "reports", label: "Reports", ownerOnly: true, icon: "📈" },
@@ -148,7 +155,7 @@ export const BRANCH_UUID_MAP: Record<string, string> = {
 const looksLikeUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 export function getBranchUuid(branchId: string): string {
-  if (!branchId) return BRANCH_UUID_MAP.toto;
+  if (!branchId) return BRANCH_UUID_MAP["toto"]!;
   const normalized = String(branchId).trim();
   if (looksLikeUuid(normalized)) return normalized;
 

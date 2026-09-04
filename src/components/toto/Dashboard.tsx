@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { Sidebar } from "@/components/toto/Sidebar";
 import { BranchSelectionPage } from "./BranchSelectionPage";
 import { BranchDashboardHeader } from "./BranchDashboardHeader";
+import { StockingSection } from "./StockingSection";
+import { WarehouseDashboard } from "./WarehouseDashboard";
 import {
   ExpensesSection,
   InventorySection,
@@ -17,15 +19,14 @@ import {
   StaffSection,
 } from "@/components/toto/sections";
 import {
-  branches,
   money,
   navItems,
   stockOf,
   colors,
-  getBranchIdFromUuid,
   type BranchId,
   type SectionId,
 } from "@/lib/toto-data";
+import { useLocations, type Location } from "@/lib/inventory";
 import { TotoStoreProvider, useToto } from "@/lib/toto-store";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -38,6 +39,7 @@ function DashboardInner() {
   const navigate = useNavigate();
   const { user, role, signOut, staffProfile, loading: authLoading } = useAuth();
   const { sales, returns, expenses, products, loading: storeLoading, refreshData } = useToto();
+  const { locations, loading: locationsLoading, createLocation, updateLocation } = useLocations();
 
   const isOwner = role === "owner";
   const isBranchManager = role === "manager";
@@ -45,23 +47,21 @@ function DashboardInner() {
   const cashier = user?.user_metadata?.["full_name"] ?? user?.email ?? "Staff";
 
   const [selectedBranch, setSelectedBranch] = useState<BranchId | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [showBranchSelector, setShowBranchSelector] = useState(true);
   const [section, setSection] = useState<SectionId>("overview");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const accessibleBranches = useMemo(() => {
-    if (isOwner) return branches;
+    const shops = locations.filter((location) => location.location_type === "shop");
+    if (isOwner) return shops;
     if (staffProfile) {
-      const rawBranchId = staffProfile.branch?.id ?? staffProfile.branch_id;
-      const branchId =
-        typeof rawBranchId === "string" && rawBranchId.length > 20
-          ? getBranchIdFromUuid(rawBranchId)
-          : rawBranchId;
-      const assignedBranch = branches.find((b) => b.id === branchId);
+      const branchId = staffProfile.branch?.id ?? staffProfile.branch_id;
+      const assignedBranch = shops.find((b) => b.id === branchId);
       return assignedBranch ? [assignedBranch] : [];
     }
     return [];
-  }, [isOwner, staffProfile]);
+  }, [isOwner, staffProfile, locations]);
 
   // All‑shop metrics (total)
   const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
@@ -72,7 +72,7 @@ function DashboardInner() {
   // Per‑branch metrics (today)
   const today = new Date().toISOString().slice(0, 10);
   const salesByBranch: Record<BranchId, { revenue: number; cost: number; vat: number; count: number }> = {};
-  branches.forEach(b => {
+  accessibleBranches.forEach(b => {
     salesByBranch[b.id] = { revenue: 0, cost: 0, vat: 0, count: 0 };
   });
   sales.forEach(s => {
@@ -85,7 +85,7 @@ function DashboardInner() {
     }
   });
   const expensesByBranch: Record<BranchId, number> = {};
-  branches.forEach(b => {
+  accessibleBranches.forEach(b => {
     expensesByBranch[b.id] = 0;
   });
   expenses.forEach(e => {
@@ -94,12 +94,17 @@ function DashboardInner() {
       expensesByBranch[branchId] += e.amount || 0;
     }
   });
-  const branchSummaries = branches.map((b) => {
+  const branchSummaries = accessibleBranches.map((b) => {
     const salesData = salesByBranch[b.id] || { revenue: 0, cost: 0, vat: 0 };
     const expensesToday = expensesByBranch[b.id] || 0;
     return {
       id: b.id,
       name: b.name,
+      code: b.code,
+      location_type: b.location_type,
+      address: b.address,
+      phone: b.phone,
+      is_active: b.is_active,
       revenueToday: salesData.revenue,
       expensesToday,
       profitToday: salesData.revenue - salesData.cost - expensesToday,
@@ -122,7 +127,7 @@ function DashboardInner() {
         return;
       }
 
-      const assignedBranch = accessibleBranches[0].id;
+      const assignedBranch = accessibleBranches[0]!.id;
       if (!selectedBranch || selectedBranch !== assignedBranch) {
         setSelectedBranch(assignedBranch);
       }
@@ -131,12 +136,20 @@ function DashboardInner() {
     }
 
     if (accessibleBranches.length === 1 && !selectedBranch && !showBranchSelector) {
-      setSelectedBranch(accessibleBranches[0].id);
+      setSelectedBranch(accessibleBranches[0]!.id);
       setShowBranchSelector(false);
     }
   }, [authLoading, accessibleBranches, isOwner, selectedBranch, showBranchSelector]);
 
-  if (!authLoading && accessibleBranches.length === 0) {
+  if (authLoading || storeLoading || locationsLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: colors.primary }} />
+      </div>
+    );
+  }
+
+  if (!isOwner && accessibleBranches.length === 0) {
     const handleSignOut = async () => {
       const { error } = await signOut();
       if (!error) {
@@ -169,11 +182,16 @@ function DashboardInner() {
   if (showBranchSelector && isOwner) {
     return (
       <BranchSelectionPage
-        branches={branchSummaries}
-        onSelectBranch={(id) => {
-          setSelectedBranch(id);
+        shops={branchSummaries}
+        warehouses={locations.filter((location) => location.location_type === "warehouse")}
+        onSelectLocation={(location) => {
+          setSelectedLocation(location);
+          setSelectedBranch(location.location_type === "shop" ? location.id : null);
           setShowBranchSelector(false);
         }}
+        onCreateLocation={createLocation}
+        onArchiveLocation={async (location) => updateLocation(location.id, { is_active: false })}
+        onRenameLocation={async (location, name) => updateLocation(location.id, { name })}
         userEmail={user?.email}
         role={role || undefined}
         onLogout={() => {
@@ -188,12 +206,10 @@ function DashboardInner() {
     );
   }
 
-  if (authLoading || storeLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2" style={{ borderColor: colors.primary }} />
-      </div>
-    );
+  if (isOwner && selectedLocation?.location_type === "warehouse") {
+    return <WarehouseDashboard warehouse={selectedLocation} onBack={() => { setShowBranchSelector(true); setSelectedLocation(null); setSection("overview"); }}
+      onLogout={() => { signOut(); navigate({ to: "/auth" }); }}
+      onArchive={() => updateLocation(selectedLocation.id, { is_active: false })} />;
   }
 
   if (!selectedBranch) {
@@ -202,7 +218,7 @@ function DashboardInner() {
   }
 
   const effectiveShop = selectedBranch;
-  const data = branches.find((b) => b.id === effectiveShop) || branches[0];
+  const data = locations.find((b) => b.id === effectiveShop) ?? accessibleBranches[0]!;
   const visibleNav = canManageBranch
     ? navItems
     : [
@@ -259,6 +275,7 @@ function DashboardInner() {
   const handleSwitchBranch = () => {
     setShowBranchSelector(true);
     setSelectedBranch(null);
+    setSelectedLocation(null);
     setSection("overview");
   };
 
@@ -299,6 +316,7 @@ function DashboardInner() {
                     <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={canManageBranch} />
                   )}
                   {activeSection === "inventory" && <InventorySection shop={effectiveShop} />}
+                  {activeSection === "stocking" && <StockingSection shopId={effectiveShop} shopName={data.name} />}
                   {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
                   {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
                   {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
@@ -323,7 +341,7 @@ function DashboardInner() {
                   <button
                     key={item.id}
                     onClick={() => {
-                      setSection(item.id);
+                      setSection(item.id as SectionId);
                       setMobileMenuOpen(false);
                     }}
                     className={cn(
