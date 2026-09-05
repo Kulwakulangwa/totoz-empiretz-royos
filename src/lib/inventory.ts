@@ -310,3 +310,52 @@ export async function adjustWarehouseInventory(
   });
   if (error) throw error;
 }
+
+// ============================================================
+// EDIT / DELETE FUNCTIONS (Added in the last prompt)
+// ============================================================
+
+export async function updateCatalogProduct(
+  productId: string,
+  product: {
+    name: string;
+    sku: string;
+    barcode: string | null;
+    category: string | null;
+    unit: string;
+    selling_price: number;
+  },
+) {
+  const { error } = await db.rpc("update_catalog_product", {
+    _product_id: productId,
+    _name: product.name,
+    _sku: product.sku,
+    _barcode: product.barcode,
+    _category: product.category,
+    _unit: product.unit,
+    _selling_price: product.selling_price,
+  });
+  if (error) throw error;
+}
+
+export async function updateInventoryBalance(
+  locationId: string,
+  productId: string,
+  quantity: number,
+  minStock: number,
+) {
+  const { error } = await db.rpc("update_inventory_balance", {
+    _location_id: locationId,
+    _product_id: productId,
+    _quantity: quantity,
+    _min_stock: minStock,
+  });
+  if (error) throw error;
+}
+
+export async function deleteCatalogProduct(productId: string) {
+  const { error } = await db.rpc("delete_catalog_product", {
+    _product_id: productId,
+  });
+  if (error) throw error;
+}
