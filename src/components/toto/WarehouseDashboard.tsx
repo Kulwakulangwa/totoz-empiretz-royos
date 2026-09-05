@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Boxes, ClipboardCheck, LogOut, PackagePlus, Warehouse, ImagePlus, X } from "lucide-react";
+import { ArrowLeft, Boxes, ClipboardCheck, LogOut, PackagePlus, Warehouse, ImagePlus, X, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppLogo } from "./AppLogo";
 import { EmptyState, Panel, PanelHead, Pill } from "./primitives";
@@ -9,15 +9,18 @@ import {
   loadCatalog,
   loadWarehouseInventory,
   loadWarehouseReceipts,
-  loadWarehouseOrders, // Added this import
+  loadWarehouseOrders,
   receiveWarehouseStock,
   receiveNewWarehouseProduct,
   adjustWarehouseInventory,
+  updateCatalogProduct, // Added
+  updateInventoryBalance, // Added
+  deleteCatalogProduct, // Added
   type CatalogProduct,
   type InventoryBalance,
   type Location,
   type WarehouseReceipt,
-  type WarehouseOrderView, // Added this import
+  type WarehouseOrderView,
 } from "@/lib/inventory";
 import { supabase } from "@/integrations/supabase/client";
 import { compressProductImage } from "@/lib/product-images";
@@ -59,6 +62,19 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     selling_price: "",
   });
 
+  // Edit State
+  const [editingItem, setEditingItem] = useState<InventoryBalance | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    sku: "",
+    barcode: "",
+    category: "",
+    unit: "pcs",
+    selling_price: "",
+    quantity: "",
+    min_stock: "",
+  });
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -66,7 +82,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         loadWarehouseInventory(warehouse.id),
         loadCatalog(),
         loadWarehouseReceipts(warehouse.id),
-        loadWarehouseOrders(warehouse.id), // Updated to use the new function
+        loadWarehouseOrders(warehouse.id),
       ]);
       setInventory(balances);
       setCatalog(products);
@@ -93,7 +109,6 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     [inventory, served],
   );
 
-  // Image Upload Logic
   const handleImageSelect = async (file?: File) => {
     if (!file) return;
     try {
@@ -209,6 +224,61 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     }
   };
 
+  // New: Open Edit Modal
+  const openEdit = (row: InventoryBalance) => {
+    if (!row.catalog_products) return;
+    setEditingItem(row);
+    setEditForm({
+      name: row.catalog_products.name,
+      sku: row.catalog_products.sku,
+      barcode: row.catalog_products.barcode || "",
+      category: row.catalog_products.category || "",
+      unit: row.catalog_products.unit,
+      selling_price: String(row.catalog_products.selling_price),
+      quantity: String(row.quantity),
+      min_stock: String(row.min_stock),
+    });
+  };
+
+  // New: Save Edit
+  const saveEdit = async () => {
+    if (!editingItem) return;
+    try {
+      await updateCatalogProduct(editingItem.product_id, {
+        name: editForm.name,
+        sku: editForm.sku,
+        barcode: editForm.barcode || null,
+        category: editForm.category || null,
+        unit: editForm.unit,
+        selling_price: Number(editForm.selling_price) || 0,
+      });
+      await updateInventoryBalance(
+        warehouse.id,
+        editingItem.product_id,
+        Number(editForm.quantity) || 0,
+        Number(editForm.min_stock) || 0,
+      );
+      toast("Product updated successfully");
+      setEditingItem(null);
+      await refresh();
+    } catch (error) {
+      toast("Could not update product", { description: errorMessage(error) });
+    }
+  };
+
+  // New: Delete Item
+  const deleteItem = async (row: InventoryBalance) => {
+    if (!row.catalog_products) return;
+    if (!window.confirm(`Are you sure you want to delete ${row.catalog_products.name}?`)) return;
+    try {
+      await deleteCatalogProduct(row.product_id);
+      toast("Product deleted");
+      await refresh();
+    } catch (error) {
+      toast("Could not delete product", { description: errorMessage(error) });
+    }
+  };
+
   const nav: Array<{ id: View; label: string; icon: typeof Boxes }> = [
     { id: "overview", label: "Dashboard", icon: Warehouse },
     { id: "inventory", label: "Stock available", icon: Boxes },
@@ -289,15 +359,10 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                       />
                       <div className="grid gap-2">
                         {receipts.map((receipt) => (
-                          <div
-                            key={receipt.id}
-                            className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-sm"
-                          >
+                          <div key={receipt.id} className="flex flex-wrap justify-between gap-2 rounded-lg bg-slate-50 p-3 text-sm">
                             <div>
                               <strong>{receipt.receipt_number}</strong>
-                              <p className="text-xs text-slate-500">
-                                {new Date(receipt.created_at).toLocaleString()}
-                              </p>
+                              <p className="text-xs text-slate-500">{new Date(receipt.created_at).toLocaleString()}</p>
                             </div>
                             <div className="text-right">
                               {receipt.warehouse_receipt_items?.map((item) => (
@@ -309,9 +374,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                           </div>
                         ))}
                         {!receipts.length && (
-                          <p className="py-5 text-center text-sm text-slate-500">
-                            No receipts yet.
-                          </p>
+                          <p className="py-5 text-center text-sm text-slate-500">No receipts yet.</p>
                         )}
                       </div>
                     </Panel>
@@ -327,7 +390,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                         Add stock
                       </button>
                     </PanelHead>
-                    <InventoryList rows={inventory} onAdjust={correctStock} />
+                    <InventoryList rows={inventory} onAdjust={correctStock} onEdit={openEdit} onDelete={deleteItem} />
                   </Panel>
                 )}
                 {view === "receive" && (
@@ -337,18 +400,8 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                       description="Add an existing catalog item or create a globally shared product."
                     />
                     <div className="mb-4 flex gap-2">
-                      <button
-                        className={newProduct ? btn : btnPrimary}
-                        onClick={() => setNewProduct(false)}
-                      >
-                        Existing product
-                      </button>
-                      <button
-                        className={newProduct ? btnPrimary : btn}
-                        onClick={() => setNewProduct(true)}
-                      >
-                        New product
-                      </button>
+                      <button className={newProduct ? btn : btnPrimary} onClick={() => setNewProduct(false)}>Existing product</button>
+                      <button className={newProduct ? btnPrimary : btn} onClick={() => setNewProduct(true)}>New product</button>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-2">
                       {newProduct ? (
@@ -364,10 +417,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                                 )}
                               </div>
                               <div className="flex flex-1 gap-2">
-                                <button
-                                  className={btn}
-                                  onClick={() => galleryInputRef.current?.click()}
-                                >
+                                <button className={btn} onClick={() => galleryInputRef.current?.click()}>
                                   <ImagePlus className="size-4" />
                                   {imagePreview ? "Replace" : "Upload Image"}
                                 </button>
@@ -377,61 +427,21 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                                     Remove
                                   </button>
                                 )}
-                                <input
-                                  ref={galleryInputRef}
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={(e) => handleImageSelect(e.target.files?.[0])}
-                                />
+                                <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e.target.files?.[0])} />
                               </div>
                             </div>
                           </div>
-
-                          <Input
-                            label="Product name"
-                            value={productForm.name}
-                            onChange={(value) => setProductForm({ ...productForm, name: value })}
-                          />
-                          <Input
-                            label="SKU"
-                            value={productForm.sku}
-                            onChange={(value) => setProductForm({ ...productForm, sku: value })}
-                          />
-                          <Input
-                            label="Barcode (optional)"
-                            value={productForm.barcode}
-                            onChange={(value) => setProductForm({ ...productForm, barcode: value })}
-                          />
-                          <Input
-                            label="Category"
-                            value={productForm.category}
-                            onChange={(value) =>
-                              setProductForm({ ...productForm, category: value })
-                            }
-                          />
-                          <Input
-                            label="Unit"
-                            value={productForm.unit}
-                            onChange={(value) => setProductForm({ ...productForm, unit: value })}
-                          />
-                          <Input
-                            label="Selling price"
-                            type="number"
-                            value={productForm.selling_price}
-                            onChange={(value) =>
-                              setProductForm({ ...productForm, selling_price: value })
-                            }
-                          />
+                          <Input label="Product name" value={productForm.name} onChange={(value) => setProductForm({ ...productForm, name: value })} />
+                          <Input label="SKU" value={productForm.sku} onChange={(value) => setProductForm({ ...productForm, sku: value })} />
+                          <Input label="Barcode (optional)" value={productForm.barcode} onChange={(value) => setProductForm({ ...productForm, barcode: value })} />
+                          <Input label="Category" value={productForm.category} onChange={(value) => setProductForm({ ...productForm, category: value })} />
+                          <Input label="Unit" value={productForm.unit} onChange={(value) => setProductForm({ ...productForm, unit: value })} />
+                          <Input label="Selling price" type="number" value={productForm.selling_price} onChange={(value) => setProductForm({ ...productForm, selling_price: value })} />
                         </>
                       ) : (
                         <label className="grid gap-1.5 sm:col-span-2">
                           <span className="text-xs font-medium text-slate-600">Product</span>
-                          <select
-                            className="min-h-10 rounded-lg border bg-white px-3 text-sm"
-                            value={productId}
-                            onChange={(event) => setProductId(event.target.value)}
-                          >
+                          <select className="min-h-10 rounded-lg border bg-white px-3 text-sm" value={productId} onChange={(event) => setProductId(event.target.value)}>
                             <option value="">Select product</option>
                             {catalog.map((product) => (
                               <option key={product.id} value={product.id}>
@@ -441,25 +451,11 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                           </select>
                         </label>
                       )}
-                      <Input
-                        label="Quantity"
-                        type="number"
-                        value={quantity}
-                        onChange={setQuantity}
-                      />
-                      <Input
-                        label="Unit buying cost"
-                        type="number"
-                        value={cost}
-                        onChange={setCost}
-                      />
+                      <Input label="Quantity" type="number" value={quantity} onChange={setQuantity} />
+                      <Input label="Unit buying cost" type="number" value={cost} onChange={setCost} />
                       <label className="grid gap-1.5 sm:col-span-2">
                         <span className="text-xs font-medium text-slate-600">Notes</span>
-                        <textarea
-                          className="min-h-20 rounded-lg border bg-white p-3 text-sm"
-                          value={notes}
-                          onChange={(event) => setNotes(event.target.value)}
-                        />
+                        <textarea className="min-h-20 rounded-lg border bg-white p-3 text-sm" value={notes} onChange={(event) => setNotes(event.target.value)} />
                       </label>
                     </div>
                     <button className={`${btnPrimary} mt-4`} onClick={submitReceipt}>
@@ -469,16 +465,10 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                 )}
                 {view === "orders" && (
                   <Panel>
-                    <PanelHead
-                      title="Served orders"
-                      description="Allocations fulfilled from this warehouse."
-                    />
+                    <PanelHead title="Served orders" description="Allocations fulfilled from this warehouse." />
                     <div className="grid gap-3">
                       {served.map((row) => (
-                        <div
-                          key={row.allocation_id}
-                          className="flex flex-wrap justify-between gap-3 rounded-xl border bg-white p-4"
-                        >
+                        <div key={row.allocation_id} className="flex flex-wrap justify-between gap-3 rounded-xl border bg-white p-4">
                           <div>
                             <strong>{row.order_number}</strong>
                             <p className="text-xs text-slate-500">{row.product_name}</p>
@@ -488,34 +478,20 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                             </p>
                           </div>
                           <div className="text-right">
-                            <Pill
-                              tone={
-                                row.status === "completed"
-                                  ? "ok"
-                                  : "neutral"
-                              }
-                            >
-                              {row.status}
-                            </Pill>
+                            <Pill tone={row.status === "completed" ? "ok" : "neutral"}>{row.status}</Pill>
                             <p className="mt-1 text-sm font-semibold">{row.quantity} units</p>
                           </div>
                         </div>
                       ))}
                       {!served.length && (
-                        <EmptyState
-                          title="No served orders"
-                          copy="Completed shop allocations will appear here."
-                        />
+                        <EmptyState title="No served orders" copy="Completed shop allocations will appear here." />
                       )}
                     </div>
                   </Panel>
                 )}
                 {view === "settings" && (
                   <Panel className="max-w-xl">
-                    <PanelHead
-                      title="Warehouse settings"
-                      description="Historical warehouses can be archived but not deleted."
-                    />
+                    <PanelHead title="Warehouse settings" description="Historical warehouses can be archived but not deleted." />
                     <dl className="grid gap-3 text-sm">
                       <div>
                         <dt className="text-slate-500">Code</dt>
@@ -530,15 +506,12 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                         <dd>{warehouse.phone || "Not set"}</dd>
                       </div>
                     </dl>
-                    <button
-                      className="mt-6 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                      onClick={async () => {
-                        if (window.confirm(`Archive ${warehouse.name}?`)) {
-                          await onArchive();
-                          onBack();
-                        }
-                      }}
-                    >
+                    <button className="mt-6 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50" onClick={async () => {
+                      if (window.confirm(`Archive ${warehouse.name}?`)) {
+                        await onArchive();
+                        onBack();
+                      }
+                    }}>
                       Archive warehouse
                     </button>
                   </Panel>
@@ -548,6 +521,34 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
           </main>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold">Edit Product</h2>
+              <button onClick={() => setEditingItem(null)} className="text-slate-500 hover:text-slate-800">
+                <X className="size-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input label="Product name" value={editForm.name} onChange={(v) => setEditForm({ ...editForm, name: v })} />
+              <Input label="SKU" value={editForm.sku} onChange={(v) => setEditForm({ ...editForm, sku: v })} />
+              <Input label="Barcode" value={editForm.barcode} onChange={(v) => setEditForm({ ...editForm, barcode: v })} />
+              <Input label="Category" value={editForm.category} onChange={(v) => setEditForm({ ...editForm, category: v })} />
+              <Input label="Unit" value={editForm.unit} onChange={(v) => setEditForm({ ...editForm, unit: v })} />
+              <Input label="Selling Price" type="number" value={editForm.selling_price} onChange={(v) => setEditForm({ ...editForm, selling_price: v })} />
+              <Input label="Quantity" type="number" value={editForm.quantity} onChange={(v) => setEditForm({ ...editForm, quantity: v })} />
+              <Input label="Min Stock" type="number" value={editForm.min_stock} onChange={(v) => setEditForm({ ...editForm, min_stock: v })} />
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button className={btn} onClick={() => setEditingItem(null)}>Cancel</button>
+              <button className={btnPrimary} onClick={saveEdit}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -555,9 +556,13 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
 function InventoryList({
   rows,
   onAdjust,
+  onEdit,
+  onDelete,
 }: {
   rows: InventoryBalance[];
   onAdjust?: (row: InventoryBalance) => void;
+  onEdit?: (row: InventoryBalance) => void;
+  onDelete?: (row: InventoryBalance) => void;
 }) {
   if (!rows.length)
     return (
@@ -576,7 +581,7 @@ function InventoryList({
             <th>Quantity</th>
             <th>Average cost</th>
             <th>Value</th>
-            {onAdjust && <th />}
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -587,13 +592,23 @@ function InventoryList({
               <td>{row.quantity}</td>
               <td>{money(Number(row.average_unit_cost))}</td>
               <td>{money(row.quantity * Number(row.average_unit_cost))}</td>
-              {onAdjust && (
-                <td>
-                  <button className={btn} onClick={() => onAdjust(row)}>
-                    Correct
-                  </button>
-                </td>
-              )}
+              <td>
+                <div className="flex gap-2">
+                  {onAdjust && (
+                    <button className={btn} onClick={() => onAdjust(row)}>Correct</button>
+                  )}
+                  {onEdit && (
+                    <button className={btn} onClick={() => onEdit(row)}>
+                      <Pencil className="size-4" /> Edit
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button className="text-red-600 hover:text-red-800" onClick={() => onDelete(row)}>
+                      <Trash2 className="size-4" />
+                    </button>
+                  )}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
