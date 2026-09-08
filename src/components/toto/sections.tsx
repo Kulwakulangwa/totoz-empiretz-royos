@@ -246,7 +246,11 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
   const [scanningBarcode, setScanningBarcode] = useState(false);
   const [scanningQR, setScanningQR] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const isMobileLayout = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
+  // FIX 1: Moved window check into state to prevent hydration error
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  useEffect(() => {
+    setIsMobileLayout(window.matchMedia("(max-width: 768px)").matches);
+  }, []);
 
   const assigned = branchLabel(activeBranch);
   const available = useMemo(
@@ -1385,13 +1389,19 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
   const { expenses, addExpense, removeExpense } = useToto();
   const fixedBranch: BranchId = shop === "all" ? "toto" : shop;
   const [open, setOpen] = usePersistentState(`totoz.expenses.${fixedBranch}.open`, false);
+  // FIX 2: Initial date is empty string to prevent hydration error
   const [form, setForm] = usePersistentState(`totoz.expenses.${fixedBranch}.form`, {
-    date: new Date().toISOString().slice(0, 10),
+    date: "",
     branch: fixedBranch,
     category: expenseCategories[0] ?? "Other",
     description: "",
     amount: "",
   });
+
+  // FIX 2: Set date after mount
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, date: new Date().toISOString().slice(0, 10) }));
+  }, []);
 
   useEffect(() => {
     setForm((prev) => ({ ...prev, branch: fixedBranch }));
@@ -2176,7 +2186,11 @@ export function ReturnsSection({
 
 export function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner?: boolean }) {
   const { sales, refreshData } = useToto();
-  const [currentDay, setCurrentDay] = useState(() => new Date().toISOString().slice(0, 10));
+  // FIX 3: Prevent hydration error by setting date after mount
+  const [currentDay, setCurrentDay] = useState("");
+  useEffect(() => {
+    setCurrentDay(new Date().toISOString().slice(0, 10));
+  }, []);
 
   useEffect(() => {
     const tick = () => {
