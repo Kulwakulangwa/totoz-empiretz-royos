@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { registerBranchLabels } from "@/lib/toto-data";
 
@@ -96,19 +96,50 @@ export function useLocations(includeArchived = false) {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const prevLocationsRef = useRef<string | null>(null);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
+    console.warn("[inventory] useLocations.refresh called", { includeArchived });
     setLoading(true);
-    let query = db
-      .from("branches")
-      .select("id,name,code,location_type,address,phone,is_active")
-      .order("name");
-    if (!includeArchived) query = query.eq("is_active", true);
-    const { data, error: queryError } = await query;
-    setError(queryError?.message ?? null);
-    setLocations((data ?? []) as Location[]);
-    registerBranchLabels(data ?? []);
-    setLoading(false);
+    try {
+      let query = db
+        .from("branches")
+        .select("id,name,code,location_type,address,phone,is_active")
+        .order("name");
+      if (!includeArchived) query = query.eq("is_active", true);
+
+      const { data, error: queryError } = await query;
+      if (queryError) throw queryError;
+
+      const nextLocations = (data ?? []) as Location[];
+      const nextSignature = JSON.stringify({ includeArchived, data: nextLocations });
+      const shouldUpdate = prevLocationsRef.current !== nextSignature;
+
+      if (shouldUpdate) {
+        prevLocationsRef.current = nextSignature;
+        if (mounted.current) {
+          setLocations(nextLocations);
+        }
+      } else {
+        console.warn("[inventory] useLocations.refresh – data unchanged, skipping setState");
+      }
+
+      registerBranchLabels(nextLocations);
+      setError(null);
+    } catch (err: any) {
+      console.warn("[inventory] useLocations.refresh error", err);
+      if (mounted.current) setError(err.message);
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
   }, [includeArchived]);
 
   useEffect(() => {

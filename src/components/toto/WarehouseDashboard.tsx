@@ -149,6 +149,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
       toast("Enter a positive whole quantity and a valid cost.");
       return;
     }
+
     try {
       let selectedId = productId;
       if (newProduct) {
@@ -157,19 +158,19 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
           return;
         }
 
-        // 1. Upload Image to Supabase Storage if provided
         let imagePath: string | null = null;
         if (imageFile) {
           const safeSku = productForm.sku.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-");
           const path = `${warehouse.id}/${safeSku}/${Date.now()}.webp`;
+
           const { error: uploadError } = await supabase.storage
             .from("product-images")
             .upload(path, imageFile, { upsert: true, contentType: "image/webp" });
+
           if (uploadError) throw uploadError;
           imagePath = path;
         }
 
-        // 2. Create Product with Image
         await receiveNewWarehouseProduct(
           warehouse.id,
           {
@@ -179,7 +180,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
             category: productForm.category.trim() || null,
             unit: productForm.unit.trim() || "pcs",
             selling_price: Number(productForm.selling_price) || 0,
-            image_path: imagePath, // Added image_path
+            image_path: imagePath,
           },
           qty,
           unitCost,
@@ -187,6 +188,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         );
         selectedId = "";
       }
+
       if (!newProduct) {
         if (!selectedId) {
           toast("Select a product.");
@@ -194,6 +196,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         }
         await receiveWarehouseStock(warehouse.id, selectedId, qty, unitCost, notes);
       }
+
       toast("Warehouse stock received");
       setProductId("");
       setQuantity("");
@@ -208,10 +211,20 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         unit: "pcs",
         selling_price: "",
       });
-      clearImage(); // Clear the image after successful submission
-      await refresh();
+      clearImage();
+
+      try {
+        await refresh();
+      } catch (refreshError) {
+        console.warn("[WarehouseDashboard] submitReceipt refresh error", refreshError);
+        toast("Warehouse stock received, but the stock list could not refresh.", {
+          description: errorMessage(refreshError),
+        });
+      }
+
       setView("inventory");
     } catch (error: unknown) {
+      console.warn("[WarehouseDashboard] submitReceipt error", error);
       toast("Stock receipt failed", { description: errorMessage(error) });
     }
   };
