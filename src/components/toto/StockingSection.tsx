@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { PackagePlus, RotateCcw, Search, Truck } from "lucide-react";
+import { PackagePlus, RotateCcw, Search, Truck, ImageIcon } from "lucide-react";
 import { Panel, PanelHead, EmptyState, Pill } from "./primitives";
 import { btn, btnPrimary } from "./sections";
 import { useToto } from "@/lib/toto-store";
@@ -195,9 +195,19 @@ export function StockingSection({ shopId, shopName }: Props) {
             {products.map(({ product, rows }) => (
               <div key={product.product_id} className="rounded-xl border bg-white p-4">
                 <div className="mb-3 flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold">{product.product_name}</h3>
-                    <p className="font-mono text-xs text-muted-foreground">{product.sku}</p>
+                  {/* UPDATED: Added Product Image */}
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted">
+                      {product.image_path ? (
+                        <img src={product.image_path} alt={product.product_name} className="h-full w-full object-cover" loading="lazy" />
+                      ) : (
+                        <ImageIcon className="size-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{product.product_name}</h3>
+                      <p className="font-mono text-xs text-muted-foreground">{product.sku}</p>
+                    </div>
                   </div>
                   <Pill tone="neutral">
                     {rows.reduce((sum, row) => sum + row.quantity, 0)} total
@@ -322,8 +332,23 @@ export function StockingSection({ shopId, shopName }: Props) {
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {order.stock_order_items?.map((item) => (
                 <div key={item.id} className="rounded-lg bg-muted/60 px-3 py-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>{item.catalog_products?.name ?? "Product"}</span>
+                  {/* UPDATED: Added Product Image in history */}
+                  <div className="flex justify-between items-center gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="grid size-8 shrink-0 place-items-center overflow-hidden rounded-md border bg-white">
+                        {item.catalog_products?.image_path ? (
+                          <img 
+                            src={item.catalog_products.image_path} 
+                            alt={item.catalog_products.name} 
+                            className="h-full w-full object-cover" 
+                            loading="lazy" 
+                          />
+                        ) : (
+                          <ImageIcon className="size-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <span className="truncate">{item.catalog_products?.name ?? "Product"}</span>
+                    </div>
                     <strong>{item.total_quantity}</strong>
                   </div>
                   <p className="mt-1 text-[11px] text-muted-foreground">
