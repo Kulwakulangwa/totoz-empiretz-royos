@@ -65,6 +65,12 @@ function DashboardInner() {
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // FIX: Prevent hydration error for dates
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    setToday(new Date().toISOString().slice(0, 10));
+  }, []);
+
   const accessibleBranches = useMemo(() => {
     const shops = locations.filter((location) => location.location_type === "shop");
     if (isOwner) return shops;
@@ -83,7 +89,7 @@ function DashboardInner() {
   const allVat = sales.reduce((sum, s) => sum + s.vat, 0);
 
   // Per‑branch metrics (today)
-  const today = new Date().toISOString().slice(0, 10);
+  // (Uses the safe 'today' state)
   const salesByBranch: Record<BranchId, { revenue: number; cost: number; vat: number; count: number }> = {};
   accessibleBranches.forEach(b => {
     salesByBranch[b.id] = { revenue: 0, cost: 0, vat: 0, count: 0 };
@@ -306,7 +312,9 @@ function DashboardInner() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)` }}>
+    // FIX: Added suppressHydrationWarning to prevent any hidden timezone mismatches
+    <div className="min-h-screen" suppressHydrationWarning style={{ background: `linear-gradient(135deg, ${colors.gradientMint} 0%, ${colors.gradientPink} 50%, ${colors.gradientDeepPurple} 100%)` }}>
+      {/* ... rest of the JSX ... */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-10 right-20 w-32 h-32 rounded-full bg-white/10" />
         <div className="absolute top-40 right-60 w-16 h-16 rounded-full bg-white/5" />
@@ -362,6 +370,7 @@ function DashboardInner() {
         </div>
       </div>
 
+      {/* ... rest of the mobile nav ... */}
       <nav className="fixed inset-x-0 bottom-0 z-50 md:hidden">
         <div className="mx-3 mb-3">
           {mobileMenuOpen && (
