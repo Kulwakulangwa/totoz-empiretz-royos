@@ -22,3 +22,7 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Production changes
+
+This project is connected to a production Supabase database. See [Production Safety](docs/production-safety.md) before applying migrations or deploying schema changes.

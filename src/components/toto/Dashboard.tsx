@@ -29,6 +29,7 @@ import {
 import { useLocations, type Location } from "@/lib/inventory";
 import { TotoStoreProvider, useToto } from "@/lib/toto-store";
 import { useAuth } from "@/hooks/use-auth";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 
 const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-full border border-border bg-card px-4 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -46,10 +47,22 @@ function DashboardInner() {
   const canManageBranch = isOwner || isBranchManager;
   const cashier = user?.user_metadata?.["full_name"] ?? user?.email ?? "Staff";
 
-  const [selectedBranch, setSelectedBranch] = useState<BranchId | null>(null);
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
-  const [showBranchSelector, setShowBranchSelector] = useState(true);
-  const [section, setSection] = useState<SectionId>("overview");
+  const [selectedBranch, setSelectedBranch] = usePersistentState<BranchId | null>(
+    "totoz.dashboard.selectedBranch",
+    null,
+  );
+  const [selectedLocation, setSelectedLocation] = usePersistentState<Location | null>(
+    "totoz.dashboard.selectedLocation",
+    null,
+  );
+  const [showBranchSelector, setShowBranchSelector] = usePersistentState(
+    "totoz.dashboard.showBranchSelector",
+    true,
+  );
+  const [section, setSection] = usePersistentState<SectionId>(
+    "totoz.dashboard.section",
+    "overview",
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const accessibleBranches = useMemo(() => {
@@ -207,9 +220,22 @@ function DashboardInner() {
   }
 
   if (isOwner && selectedLocation?.location_type === "warehouse") {
-    return <WarehouseDashboard warehouse={selectedLocation} onBack={() => { setShowBranchSelector(true); setSelectedLocation(null); setSection("overview"); }}
-      onLogout={() => { signOut(); navigate({ to: "/auth" }); }}
-      onArchive={() => updateLocation(selectedLocation.id, { is_active: false })} />;
+    return (
+      <WarehouseDashboard
+        key={selectedLocation.id}
+        warehouse={selectedLocation}
+        onBack={() => {
+          setShowBranchSelector(true);
+          setSelectedLocation(null);
+          setSection("overview");
+        }}
+        onLogout={() => {
+          signOut();
+          navigate({ to: "/auth" });
+        }}
+        onArchive={() => updateLocation(selectedLocation.id, { is_active: false })}
+      />
+    );
   }
 
   if (!selectedBranch) {
@@ -310,14 +336,18 @@ function DashboardInner() {
               {canManageBranch ? (
                 <>
                   {activeSection === "overview" && <OverviewSection shop={effectiveShop} />}
-                  {activeSection === "pos" && <PosSection shop={effectiveShop} cashier={cashier} />}
+                  {activeSection === "pos" && (
+                    <PosSection key={effectiveShop} shop={effectiveShop} cashier={cashier} />
+                  )}
                   {activeSection === "sales" && <SalesSection shop={effectiveShop} isOwner={canManageBranch} />}
                   {activeSection === "returns" && (
                     <ReturnsSection shop={effectiveShop} cashier={cashier} isOwner={canManageBranch} />
                   )}
-                  {activeSection === "inventory" && <InventorySection shop={effectiveShop} />}
-                  {activeSection === "stocking" && <StockingSection shopId={effectiveShop} shopName={data.name} />}
-                  {activeSection === "expenses" && <ExpensesSection shop={effectiveShop} />}
+                  {activeSection === "inventory" && <InventorySection key={effectiveShop} shop={effectiveShop} />}
+                  {activeSection === "stocking" && (
+                    <StockingSection key={effectiveShop} shopId={effectiveShop} shopName={data.name} />
+                  )}
+                  {activeSection === "expenses" && <ExpensesSection key={effectiveShop} shop={effectiveShop} />}
                   {activeSection === "staff" && <StaffSection shop={effectiveShop} />}
                   {activeSection === "reports" && <ReportsSection shop={effectiveShop} />}
                   {activeSection === "settings" && <SettingsSection />}
@@ -325,7 +355,7 @@ function DashboardInner() {
               ) : activeSection === "sales" ? (
                 <SalesSection shop={effectiveShop} isOwner={canManageBranch} />
               ) : (
-                <PosSection shop={effectiveShop} cashier={cashier} />
+                <PosSection key={effectiveShop} shop={effectiveShop} cashier={cashier} />
               )}
             </main>
           </div>

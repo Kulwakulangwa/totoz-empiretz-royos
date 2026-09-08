@@ -4,6 +4,7 @@ import { PackagePlus, RotateCcw, Search, Truck } from "lucide-react";
 import { Panel, PanelHead, EmptyState, Pill } from "./primitives";
 import { btn, btnPrimary } from "./sections";
 import { useToto } from "@/lib/toto-store";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 import {
   createStockOrder,
   loadStockOrders,
@@ -21,11 +22,23 @@ export function StockingSection({ shopId, shopName }: Props) {
   const { refreshData } = useToto();
   const [availability, setAvailability] = useState<WarehouseAvailability[]>([]);
   const [orders, setOrders] = useState<StockOrder[]>([]);
-  const [quantities, setQuantities] = useState<Record<string, string>>({});
-  const [query, setQuery] = useState("");
-  const [historyQuery, setHistoryQuery] = useState("");
-  const [status, setStatus] = useState<"all" | "completed" | "reversed">("all");
-  const [creating, setCreating] = useState(false);
+  const [quantities, setQuantities] = usePersistentState<Record<string, string>>(
+    `totoz.stocking.${shopId}.quantities`,
+    {},
+  );
+  const [query, setQuery] = usePersistentState(`totoz.stocking.${shopId}.query`, "");
+  const [historyQuery, setHistoryQuery] = usePersistentState(
+    `totoz.stocking.${shopId}.historyQuery`,
+    "",
+  );
+  const [status, setStatus] = usePersistentState<"all" | "completed" | "reversed">(
+    `totoz.stocking.${shopId}.status`,
+    "all",
+  );
+  const [creating, setCreating] = usePersistentState(
+    `totoz.stocking.${shopId}.creating`,
+    false,
+  );
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 

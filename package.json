@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "check:migrations": "node scripts/check-migrations.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

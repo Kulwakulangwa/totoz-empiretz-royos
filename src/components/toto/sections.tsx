@@ -35,6 +35,7 @@ import {
 import { branchLabel, useToto, type SaleLine, type SaveResult } from "@/lib/toto-store";
 import { Camera, ImageIcon, Scan, QrCode, Upload, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 
 export const btn =
   "inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-card px-3 text-[13px] font-medium transition-colors hover:bg-accent";
@@ -235,15 +236,18 @@ type CartItem = SaleLine & { stock: number; imageUrl?: string | null | undefined
 
 export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const { products, recordSale, receipt } = useToto();
-  const [query, setQuery] = useState("");
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [pay, setPay] = useState<"Cash" | "Lipa Namba">("Cash");
+  const activeBranch: ShopId = shop === "all" ? "toto" : shop;
+  const [query, setQuery] = usePersistentState(`totoz.pos.${activeBranch}.query`, "");
+  const [cart, setCart] = usePersistentState<CartItem[]>(`totoz.pos.${activeBranch}.cart`, []);
+  const [pay, setPay] = usePersistentState<"Cash" | "Lipa Namba">(
+    `totoz.pos.${activeBranch}.payment`,
+    "Cash",
+  );
   const [scanningBarcode, setScanningBarcode] = useState(false);
   const [scanningQR, setScanningQR] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isMobileLayout = typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches;
 
-  const activeBranch: ShopId = shop === "all" ? "toto" : shop;
   const assigned = branchLabel(activeBranch);
   const available = useMemo(
     () => products.filter((p) => stockOf(p, activeBranch) > 0),
@@ -762,6 +766,39 @@ const emptyProduct: ProductForm = {
   removeImage: false,
 };
 
+type PersistedProductForm = Omit<ProductForm, "imageFile">;
+
+type InventoryDraft = {
+  open: boolean;
+  editing: string | null;
+  editingBranch: ShopId | null;
+  form: PersistedProductForm;
+};
+
+const persistableProductForm = (form: ProductForm): PersistedProductForm => ({
+  name: form.name,
+  sku: form.sku,
+  barcode: form.barcode,
+  category: form.category,
+  buy: form.buy,
+  sell: form.sell,
+  min: form.min,
+  stock: form.stock,
+  removeImage: form.removeImage,
+});
+
+const hydratedProductForm = (form: PersistedProductForm): ProductForm => ({
+  ...form,
+  imageFile: null,
+});
+
+const emptyInventoryDraft: InventoryDraft = {
+  open: false,
+  editing: null,
+  editingBranch: null,
+  form: persistableProductForm(emptyProduct),
+};
+
 const stockLabel = (p: Product, shop?: BranchId) => {
   if (shop && shop !== "all") {
     return (p.stock[shop] ?? 0) > 0 ? `${branchLabel(shop)} ${(p.stock[shop] ?? 0)}` : "No stock yet";
@@ -775,10 +812,14 @@ const stockLabel = (p: Product, shop?: BranchId) => {
 
 export function InventorySection({ shop, readOnly = true }: { shop: BranchId; readOnly?: boolean }) {
   const { products, addProduct, updateProduct, removeProduct, adjustStock } = useToto();
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [editingBranch, setEditingBranch] = useState<ShopId | null>(null);
-  const [form, setForm] = useState(emptyProduct);
+  const [draft, setDraft, clearDraft] = usePersistentState<InventoryDraft>(
+    `totoz.inventory.${shop}.productDraft`,
+    emptyInventoryDraft,
+  );
+  const [open, setOpen] = useState(draft.open);
+  const [editing, setEditing] = useState<string | null>(draft.editing);
+  const [editingBranch, setEditingBranch] = useState<ShopId | null>(draft.editingBranch);
+  const [form, setForm] = useState<ProductForm>(() => hydratedProductForm(draft.form));
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [qrProduct, setQrProduct] = useState<Product | null>(null);
@@ -795,6 +836,18 @@ export function InventorySection({ shop, readOnly = true }: { shop: BranchId; re
   const rows = shop === "all"
     ? products
     : products.filter((p) => Object.prototype.hasOwnProperty.call(p.stock, shop));
+
+  useEffect(() => {
+    const next = {
+      open,
+      editing,
+      editingBranch,
+      form: persistableProductForm(form),
+    };
+    setDraft((current) => (
+      JSON.stringify(current) === JSON.stringify(next) ? current : next
+    ));
+  }, [editing, editingBranch, form, open, setDraft]);
 
   useEffect(() => {
     return () => {
@@ -816,6 +869,7 @@ export function InventorySection({ shop, readOnly = true }: { shop: BranchId; re
     setEditingBranch(null);
     setForm({ ...emptyProduct, stock: {} });
     setPreview(null);
+    clearDraft();
   }
 
   function openNew() {
@@ -1329,9 +1383,9 @@ export function InventorySection({ shop, readOnly = true }: { shop: BranchId; re
 
 export function ExpensesSection({ shop }: { shop: BranchId }) {
   const { expenses, addExpense, removeExpense } = useToto();
-  const [open, setOpen] = useState(false);
   const fixedBranch: BranchId = shop === "all" ? "toto" : shop;
-  const [form, setForm] = useState({
+  const [open, setOpen] = usePersistentState(`totoz.expenses.${fixedBranch}.open`, false);
+  const [form, setForm] = usePersistentState(`totoz.expenses.${fixedBranch}.form`, {
     date: new Date().toISOString().slice(0, 10),
     branch: fixedBranch,
     category: expenseCategories[0] ?? "Other",

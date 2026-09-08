@@ -18,6 +18,7 @@ import {
   type WarehouseReceipt,
 } from "@/lib/inventory";
 import { supabase } from "@/integrations/supabase/client";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 
 type View = "overview" | "inventory" | "receive" | "orders" | "settings";
 type ServedAllocation = {
@@ -38,25 +39,40 @@ type Props = {
 };
 
 export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: Props) {
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = usePersistentState<View>(
+    `totoz.warehouse.${warehouse.id}.view`,
+    "overview",
+  );
   const [inventory, setInventory] = useState<InventoryBalance[]>([]);
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [served, setServed] = useState<ServedAllocation[]>([]);
   const [receipts, setReceipts] = useState<WarehouseReceipt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [productId, setProductId] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [cost, setCost] = useState("");
-  const [notes, setNotes] = useState("");
-  const [newProduct, setNewProduct] = useState(false);
-  const [productForm, setProductForm] = useState({
-    name: "",
-    sku: "",
-    barcode: "",
-    category: "",
-    unit: "pcs",
-    selling_price: "",
-  });
+  const [productId, setProductId] = usePersistentState(
+    `totoz.warehouse.${warehouse.id}.productId`,
+    "",
+  );
+  const [quantity, setQuantity] = usePersistentState(
+    `totoz.warehouse.${warehouse.id}.quantity`,
+    "",
+  );
+  const [cost, setCost] = usePersistentState(`totoz.warehouse.${warehouse.id}.cost`, "");
+  const [notes, setNotes] = usePersistentState(`totoz.warehouse.${warehouse.id}.notes`, "");
+  const [newProduct, setNewProduct] = usePersistentState(
+    `totoz.warehouse.${warehouse.id}.newProduct`,
+    false,
+  );
+  const [productForm, setProductForm] = usePersistentState(
+    `totoz.warehouse.${warehouse.id}.productForm`,
+    {
+      name: "",
+      sku: "",
+      barcode: "",
+      category: "",
+      unit: "pcs",
+      selling_price: "",
+    },
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
