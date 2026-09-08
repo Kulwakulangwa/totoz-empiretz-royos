@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Boxes, ClipboardCheck, LogOut, PackagePlus, Warehouse } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react"; // Added useRef
+import { ArrowLeft, Boxes, ClipboardCheck, LogOut, PackagePlus, Warehouse, ImagePlus, X } from "lucide-react"; // Added ImagePlus, X
 import { toast } from "sonner";
 import { AppLogo } from "./AppLogo";
 import { EmptyState, Panel, PanelHead, Pill } from "./primitives";
@@ -19,6 +19,7 @@ import {
 } from "@/lib/inventory";
 import { supabase } from "@/integrations/supabase/client";
 import { usePersistentState } from "@/hooks/use-persistent-state";
+import { compressProductImage } from "@/lib/product-images"; // Added image compressor
 
 type View = "overview" | "inventory" | "receive" | "orders" | "settings";
 type ServedAllocation = {
@@ -73,6 +74,31 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
       selling_price: "",
     },
   );
+
+  // State for Image Upload (Not persisted to localStorage because File objects cannot be serialized)
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Handlers for Image Selection
+  const handleImageSelect = async (file?: File) => {
+    if (!file) return;
+    try {
+      const compressed = await compressProductImage(file);
+      setImageFile(compressed.blob as File);
+      setImagePreview(compressed.previewUrl || URL.createObjectURL(file));
+    } catch (error) {
+      toast("Image could not be processed", { description: errorMessage(error) });
+    }
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (galleryInputRef.current) galleryInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+  };
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -130,6 +156,20 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
           toast("Product name and SKU are required.");
           return;
         }
+
+        // 1. Upload Image to Supabase Storage if provided
+        let imagePath: string | null = null;
+        if (imageFile) {
+          const safeSku = productForm.sku.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-");
+          const path = `${warehouse.id}/${safeSku}/${Date.now()}.webp`;
+          const { error: uploadError } = await supabase.storage
+            .from("product-images")
+            .upload(path, imageFile, { upsert: true, contentType: "image/webp" });
+          if (uploadError) throw uploadError;
+          imagePath = path;
+        }
+
+        // 2. Create Product with Image
         await receiveNewWarehouseProduct(
           warehouse.id,
           {
@@ -139,6 +179,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
             category: productForm.category.trim() || null,
             unit: productForm.unit.trim() || "pcs",
             selling_price: Number(productForm.selling_price) || 0,
+            image_path: imagePath, // Added image_path
           },
           qty,
           unitCost,
@@ -167,6 +208,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
         unit: "pcs",
         selling_price: "",
       });
+      clearImage(); // Clear the image after successful submission
       await refresh();
       setView("inventory");
     } catch (error: unknown) {
@@ -339,6 +381,55 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                     <div className="grid gap-3 sm:grid-cols-2">
                       {newProduct ? (
                         <>
+                          {/* Image Upload Section - Supports Camera & Gallery for Android/iPhone */}
+                          <div className="sm:col-span-2">
+                            <span className="text-xs font-medium text-slate-600">Product Image</span>
+                            <div className="mt-1 flex items-center gap-3 rounded-lg border bg-white p-3">
+                              <div className="grid size-16 place-items-center overflow-hidden rounded-lg bg-slate-100">
+                                {imagePreview ? (
+                                  <img src={imagePreview} alt="Preview" className="h-full w-full object-cover" />
+                                ) : (
+                                  <ImagePlus className="size-6 text-slate-400" />
+                                )}
+                              </div>
+                              <div className="flex flex-1 flex-wrap gap-2">
+                                {/* Camera Button (Forces Back Camera on Android, Full Option on iPhone) */}
+                                <button className={btn} onClick={() => cameraInputRef.current?.click()}>
+                                  <ImagePlus className="size-4" />
+                                  {imagePreview ? "Retake" : "Camera"}
+                                </button>
+                                {/* Gallery Button (Native Action Sheet on all Mobile Devices) */}
+                                <button className={btn} onClick={() => galleryInputRef.current?.click()}>
+                                  <ImagePlus className="size-4" />
+                                  {imagePreview ? "Replace" : "Gallery"}
+                                </button>
+                                {imagePreview && (
+                                  <button className={btn} onClick={clearImage}>
+                                    <X className="size-4" />
+                                    Remove
+                                  </button>
+                                )}
+                                
+                                {/* Hidden Native File Inputs */}
+                                <input
+                                  ref={cameraInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  capture="environment"
+                                  className="sr-only"
+                                  onChange={(e) => { handleImageSelect(e.target.files?.[0]); e.target.value = ""; }}
+                                />
+                                <input
+                                  ref={galleryInputRef}
+                                  type="file"
+                                  accept="image/*"
+                                  className="sr-only"
+                                  onChange={(e) => { handleImageSelect(e.target.files?.[0]); e.target.value = ""; }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
                           <Input
                             label="Product name"
                             value={productForm.name}
