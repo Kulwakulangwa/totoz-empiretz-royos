@@ -252,7 +252,7 @@ export async function receiveWarehouseStock(
   return data as string;
 }
 
-// UPDATED FUNCTION TO INCLUDE IMAGE_PATH
+// UPDATED FUNCTION: Uses JSONB payload to perfectly match the database function
 export async function receiveNewWarehouseProduct(
   warehouseId: string,
   product: {
@@ -262,24 +262,26 @@ export async function receiveNewWarehouseProduct(
     category: string | null;
     unit: string;
     selling_price: number;
-    image_path: string | null; // <--- Added this
+    image_path: string | null;
   },
   quantity: number,
   unitCost: number,
   notes?: string,
 ) {
   const { data, error } = await db.rpc("receive_new_warehouse_product", {
-    _warehouse_id: warehouseId,
-    _name: product.name,
-    _sku: product.sku,
-    _barcode: product.barcode,
-    _category: product.category,
-    _unit: product.unit,
-    _selling_price: product.selling_price,
-    _quantity: quantity,
-    _unit_cost: unitCost,
-    _notes: notes || null,
-    _image_path: product.image_path, // <--- Added this
+    _payload: {
+      warehouse_id: warehouseId,
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode,
+      category: product.category,
+      unit: product.unit,
+      selling_price: product.selling_price,
+      image_path: product.image_path,
+      quantity: quantity,
+      unit_cost: unitCost,
+      notes: notes || null,
+    },
   });
   if (error) throw error;
   return data as string;
