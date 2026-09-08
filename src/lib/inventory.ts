@@ -252,6 +252,7 @@ export async function receiveWarehouseStock(
   return data as string;
 }
 
+// UPDATED FUNCTION TO INCLUDE IMAGE_PATH
 export async function receiveNewWarehouseProduct(
   warehouseId: string,
   product: {
@@ -261,6 +262,7 @@ export async function receiveNewWarehouseProduct(
     category: string | null;
     unit: string;
     selling_price: number;
+    image_path: string | null; // <--- Added this
   },
   quantity: number,
   unitCost: number,
@@ -277,6 +279,7 @@ export async function receiveNewWarehouseProduct(
     _quantity: quantity,
     _unit_cost: unitCost,
     _notes: notes || null,
+    _image_path: product.image_path, // <--- Added this
   });
   if (error) throw error;
   return data as string;
