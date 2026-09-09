@@ -30,8 +30,18 @@ type ServedAllocation = {
     catalog_products?: { name: string };
   };
 };
-const errorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : "Please try again.";
+const errorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message;
+  }
+  return "Please try again.";
+};
 type Props = {
   warehouse: Location;
   onBack: () => void;

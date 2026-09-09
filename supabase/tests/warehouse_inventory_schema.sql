@@ -23,6 +23,22 @@ begin
   if to_regprocedure('public.create_shop_sale(uuid,text,jsonb)') is null then
     raise exception 'Missing atomic shop sale transaction';
   end if;
+  if to_regprocedure('public.receive_warehouse_stock(uuid,uuid,integer,numeric,text)') is null then
+    raise exception 'Missing warehouse receipt transaction';
+  end if;
+  if to_regprocedure('public.receive_new_warehouse_product(jsonb)') is null then
+    raise exception 'Missing JSON warehouse product transaction';
+  end if;
+
+  if (
+    select column_default is null
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'warehouse_receipts'
+      and column_name = 'created_by'
+  ) then
+    raise exception 'Warehouse receipts must default created_by from the authenticated user';
+  end if;
 
   if exists (select 1 from public.inventory_balances where quantity < 0) then
     raise exception 'Inventory contains a negative balance';

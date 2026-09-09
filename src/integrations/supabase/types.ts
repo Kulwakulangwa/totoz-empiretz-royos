@@ -420,7 +420,7 @@ export type Database = {
       create_stock_order: { Args: { _destination_shop_id: string; _idempotency_key: string; _allocations: Json }; Returns: string }
       reverse_stock_order: { Args: { _order_id: string; _reason: string }; Returns: undefined }
       receive_warehouse_stock: { Args: { _warehouse_id: string; _product_id: string; _quantity: number; _unit_cost: number; _notes?: string | null }; Returns: string }
-      receive_new_warehouse_product: { Args: { _warehouse_id: string; _name: string; _sku: string; _barcode: string | null; _category: string | null; _unit: string; _selling_price: number; _quantity: number; _unit_cost: number; _notes?: string | null }; Returns: string }
+      receive_new_warehouse_product: { Args: { _payload: Json }; Returns: string }
       create_shop_sale: { Args: { _shop_id: string; _payment_method: string; _lines: Json }; Returns: string }
       restock_shop_inventory: { Args: { _shop_id: string; _product_id: string; _quantity: number; _reference_id?: string | null }; Returns: undefined }
       adjust_warehouse_inventory: { Args: { _warehouse_id: string; _product_id: string; _quantity_delta: number; _reason: string }; Returns: undefined }
