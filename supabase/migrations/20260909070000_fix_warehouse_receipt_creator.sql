@@ -125,6 +125,11 @@ $$;
 -- This is the RPC used by the current warehouse UI. Keep product creation and
 -- its opening receipt in one database transaction so neither can be left half
 -- completed.
+-- PostgreSQL cannot change a function's return type with CREATE OR REPLACE.
+-- Drop only this exact overload first; do not use CASCADE because database
+-- dependencies should be reviewed rather than removed implicitly.
+drop function if exists public.receive_new_warehouse_product(jsonb);
+
 create or replace function public.receive_new_warehouse_product(
   _payload jsonb
 ) returns uuid

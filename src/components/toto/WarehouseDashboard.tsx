@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useMemo, useState, useRef } from "react"; // Added useRef
-import { ArrowLeft, Boxes, ClipboardCheck, LogOut, PackagePlus, Warehouse, ImagePlus, X } from "lucide-react"; // Added ImagePlus, X
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import {
+  ArrowLeft,
+  Boxes,
+  ClipboardCheck,
+  LogOut,
+  PackagePlus,
+  Warehouse,
+  ImagePlus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AppLogo } from "./AppLogo";
 import { EmptyState, Panel, PanelHead, Pill } from "./primitives";
@@ -12,14 +22,24 @@ import {
   receiveWarehouseStock,
   receiveNewWarehouseProduct,
   adjustWarehouseInventory,
+  isProductImageReferenced,
+  loadProductImageAudit,
+  setCatalogProductImage,
   type CatalogProduct,
   type InventoryBalance,
   type Location,
+  type ProductImageAudit,
   type WarehouseReceipt,
 } from "@/lib/inventory";
 import { supabase } from "@/integrations/supabase/client";
 import { usePersistentState } from "@/hooks/use-persistent-state";
-import { compressProductImage } from "@/lib/product-images"; // Added image compressor
+import {
+  productImagePreview,
+  removeProductImage,
+  uploadProductImage,
+} from "@/lib/product-images";
+import { ProductImage } from "./ProductImage";
+import { useToto } from "@/lib/toto-store";
 
 type View = "overview" | "inventory" | "receive" | "orders" | "settings";
 type ServedAllocation = {
@@ -27,7 +47,7 @@ type ServedAllocation = {
   quantity: number;
   stock_order_items?: {
     stock_orders?: { order_number: string; status: "completed" | "reversed" };
-    catalog_products?: { name: string };
+    catalog_products?: { name: string; image_path: string | null };
   };
 };
 const errorMessage = (error: unknown) => {
@@ -50,6 +70,7 @@ type Props = {
 };
 
 export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: Props) {
+  const { refreshData } = useToto();
   const [view, setView] = usePersistentState<View>(
     `totoz.warehouse.${warehouse.id}.view`,
     "overview",
@@ -85,30 +106,55 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     },
   );
 
-  // State for Image Upload (Not persisted to localStorage because File objects cannot be serialized)
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageAudit, setImageAudit] = useState<ProductImageAudit[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [imageSaving, setImageSaving] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const manageImageInputRef = useRef<HTMLInputElement | null>(null);
+  const imageProductRef = useRef<ProductImageAudit | null>(null);
 
-  // Handlers for Image Selection
-  const handleImageSelect = async (file?: File) => {
+  const handleImageSelect = (file?: File) => {
     if (!file) return;
     try {
-      const compressed = await compressProductImage(file);
-      setImageFile(compressed.blob as File);
-      setImagePreview(compressed.previewUrl || URL.createObjectURL(file));
+      if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+      setImageFile(file);
+      setImagePreview(productImagePreview(file));
     } catch (error) {
       toast("Image could not be processed", { description: errorMessage(error) });
     }
   };
 
   const clearImage = () => {
+    if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
     setImageFile(null);
     setImagePreview(null);
     if (galleryInputRef.current) galleryInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
+
+  useEffect(
+    () => () => {
+      if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+    },
+    [imagePreview],
+  );
+
+  const refreshImageAudit = useCallback(async () => {
+    setAuditLoading(true);
+    setAuditError(null);
+    try {
+      setImageAudit(await loadProductImageAudit());
+    } catch (error) {
+      setAuditError(errorMessage(error));
+      toast("Could not audit product images", { description: errorMessage(error) });
+    } finally {
+      setAuditLoading(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -141,6 +187,10 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (view === "settings") void refreshImageAudit();
+  }, [refreshImageAudit, view]);
+
   const metrics = useMemo(
     () => ({
       units: inventory.reduce((sum, row) => sum + row.quantity, 0),
@@ -160,6 +210,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
       return;
     }
 
+    let uploadedImagePath: string | null = null;
     try {
       let selectedId = productId;
       if (newProduct) {
@@ -168,17 +219,12 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
           return;
         }
 
-        let imagePath: string | null = null;
         if (imageFile) {
-          const safeSku = productForm.sku.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-");
-          const path = `${warehouse.id}/${safeSku}/${Date.now()}.webp`;
-
-          const { error: uploadError } = await supabase.storage
-            .from("product-images")
-            .upload(path, imageFile, { upsert: true, contentType: "image/webp" });
-
-          if (uploadError) throw uploadError;
-          imagePath = path;
+          uploadedImagePath = await uploadProductImage(
+            imageFile,
+            warehouse.id,
+            productForm.sku,
+          );
         }
 
         await receiveNewWarehouseProduct(
@@ -190,7 +236,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
             category: productForm.category.trim() || null,
             unit: productForm.unit.trim() || "pcs",
             selling_price: Number(productForm.selling_price) || 0,
-            image_path: imagePath,
+            image_path: uploadedImagePath,
           },
           qty,
           unitCost,
@@ -224,7 +270,7 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
       clearImage();
 
       try {
-        await refresh();
+        await Promise.all([refresh(), refreshData()]);
       } catch (refreshError) {
         console.warn("[WarehouseDashboard] submitReceipt refresh error", refreshError);
         toast("Warehouse stock received, but the stock list could not refresh.", {
@@ -234,9 +280,121 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
 
       setView("inventory");
     } catch (error: unknown) {
+      if (uploadedImagePath) {
+        try {
+          const referenced = await isProductImageReferenced(uploadedImagePath);
+          if (!referenced) await removeProductImage(uploadedImagePath);
+        } catch (cleanupError) {
+          console.warn("[WarehouseDashboard] image cleanup error", cleanupError);
+        }
+      }
       console.warn("[WarehouseDashboard] submitReceipt error", error);
       toast("Stock receipt failed", { description: errorMessage(error) });
     }
+  };
+
+  const chooseManagedImage = (row: ProductImageAudit) => {
+    if (!row.product_id || !row.sku) return;
+    imageProductRef.current = row;
+    if (manageImageInputRef.current) {
+      manageImageInputRef.current.value = "";
+      manageImageInputRef.current.click();
+    }
+  };
+
+  const replaceManagedImage = async (file?: File) => {
+    const target = imageProductRef.current;
+    if (!file || !target?.product_id || !target.sku) return;
+    setImageSaving(true);
+    let nextPath: string | null = null;
+    let imageAssigned = false;
+    try {
+      nextPath = await uploadProductImage(file, warehouse.id, target.sku);
+      const previousPath = await setCatalogProductImage(target.product_id, nextPath);
+      imageAssigned = true;
+      if (previousPath && previousPath !== nextPath) {
+        try {
+          const stillReferenced = await isProductImageReferenced(previousPath);
+          if (!stillReferenced) await removeProductImage(previousPath);
+        } catch (cleanupError) {
+          console.warn("[WarehouseDashboard] old image cleanup error", cleanupError);
+        }
+      }
+      toast("Product image updated", { description: target.product_name ?? target.sku });
+      await Promise.all([refresh(), refreshImageAudit(), refreshData()]);
+    } catch (error) {
+      if (nextPath && !imageAssigned) {
+        try {
+          await removeProductImage(nextPath);
+        } catch (cleanupError) {
+          console.warn("[WarehouseDashboard] replacement cleanup error", cleanupError);
+        }
+      }
+      toast("Product image could not be updated", { description: errorMessage(error) });
+    } finally {
+      imageProductRef.current = null;
+      setImageSaving(false);
+    }
+  };
+
+  const clearManagedImage = async (row: ProductImageAudit) => {
+    if (!row.product_id) return;
+    if (!window.confirm(`Remove the image for ${row.product_name ?? row.sku ?? "this product"}?`)) {
+      return;
+    }
+    setImageSaving(true);
+    try {
+      const previousPath = await setCatalogProductImage(row.product_id, null);
+      if (previousPath) {
+        try {
+          const stillReferenced = await isProductImageReferenced(previousPath);
+          if (!stillReferenced) await removeProductImage(previousPath);
+        } catch (cleanupError) {
+          console.warn("[WarehouseDashboard] removed image cleanup error", cleanupError);
+        }
+      }
+      toast("Product image removed");
+      await Promise.all([refresh(), refreshImageAudit(), refreshData()]);
+    } catch (error) {
+      toast("Product image could not be removed", { description: errorMessage(error) });
+    } finally {
+      setImageSaving(false);
+    }
+  };
+
+  const deleteOrphanedImage = async (row: ProductImageAudit) => {
+    if (!row.image_path || !window.confirm(`Delete unused image ${row.image_path}?`)) return;
+    setImageSaving(true);
+    try {
+      if (await isProductImageReferenced(row.image_path)) {
+        toast("Unused image was not deleted", {
+          description: "It became referenced after the last audit. Refreshing the audit instead.",
+        });
+        await refreshImageAudit();
+        return;
+      }
+      await removeProductImage(row.image_path);
+      toast("Unused image deleted");
+      await refreshImageAudit();
+    } catch (error) {
+      toast("Unused image could not be deleted", { description: errorMessage(error) });
+    } finally {
+      setImageSaving(false);
+    }
+  };
+
+  const auditRowForInventory = (row: InventoryBalance): ProductImageAudit | null => {
+    const product = row.catalog_products;
+    if (!product) return null;
+    return (
+      imageAudit.find((item) => item.product_id === product.id) ?? {
+        product_id: product.id,
+        sku: product.sku,
+        product_name: product.name,
+        image_path: product.image_path,
+        status: product.image_path ? "valid" : "no_image",
+      }
+    );
   };
 
   const correctStock = async (row: InventoryBalance) => {
@@ -267,9 +425,21 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     { id: "orders", label: "Served orders", icon: ClipboardCheck },
     { id: "settings", label: "Settings", icon: Warehouse },
   ];
+  const imageIssues = imageAudit.filter((row) => row.status !== "valid");
+  const validImageCount = imageAudit.filter((row) => row.status === "valid").length;
 
   return (
     <div className="min-h-screen bg-slate-950 p-3 text-slate-900 md:p-6">
+      <input
+        ref={manageImageInputRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(event) => {
+          void replaceManagedImage(event.target.files?.[0]);
+          event.target.value = "";
+        }}
+      />
       <div className="mx-auto flex min-h-[92vh] max-w-[1440px] flex-col overflow-hidden rounded-3xl bg-slate-100 shadow-2xl">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-5 py-4 text-white">
           <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-300">
@@ -350,11 +520,16 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                                 {new Date(receipt.created_at).toLocaleString()}
                               </p>
                             </div>
-                            <div className="text-right">
+                            <div className="grid gap-2 text-right">
                               {receipt.warehouse_receipt_items?.map((item) => (
-                                <p key={item.id}>
-                                  {item.catalog_products?.name} · {item.quantity}
-                                </p>
+                                <div key={item.id} className="flex items-center justify-end gap-2">
+                                  <ProductImage
+                                    imagePath={item.catalog_products?.image_path}
+                                    alt={item.catalog_products?.name ?? "Product"}
+                                    className="size-8"
+                                  />
+                                  <span>{item.catalog_products?.name} · {item.quantity}</span>
+                                </div>
                               ))}
                             </div>
                           </div>
@@ -378,7 +553,19 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                         Add stock
                       </button>
                     </PanelHead>
-                    <InventoryList rows={inventory} onAdjust={correctStock} />
+                    <InventoryList
+                      rows={inventory}
+                      onAdjust={correctStock}
+                      onImageManage={(row) => {
+                        const auditRow = auditRowForInventory(row);
+                        if (auditRow) chooseManagedImage(auditRow);
+                      }}
+                      onImageRemove={(row) => {
+                        const auditRow = auditRowForInventory(row);
+                        if (auditRow) void clearManagedImage(auditRow);
+                      }}
+                      imageSaving={imageSaving}
+                    />
                   </Panel>
                 )}
                 {view === "receive" && (
@@ -504,6 +691,21 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                               </option>
                             ))}
                           </select>
+                          {productId && (() => {
+                            const selected = catalog.find((product) => product.id === productId);
+                            return selected ? (
+                              <span className="mt-2 flex items-center gap-2 rounded-lg bg-slate-50 p-2">
+                                <ProductImage
+                                  imagePath={selected.image_path}
+                                  alt={selected.name}
+                                  className="size-10"
+                                />
+                                <span className="text-xs text-slate-500">
+                                  This catalog image follows the product to every shop.
+                                </span>
+                              </span>
+                            ) : null;
+                          })()}
                         </label>
                       )}
                       <Input
@@ -544,11 +746,18 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                           key={row.id}
                           className="flex flex-wrap justify-between gap-3 rounded-xl border bg-white p-4"
                         >
-                          <div>
-                            <strong>{row.stock_order_items?.stock_orders?.order_number}</strong>
-                            <p className="text-xs text-slate-500">
-                              {row.stock_order_items?.catalog_products?.name}
-                            </p>
+                          <div className="flex items-center gap-3">
+                            <ProductImage
+                              imagePath={row.stock_order_items?.catalog_products?.image_path}
+                              alt={row.stock_order_items?.catalog_products?.name ?? "Product"}
+                              className="size-10"
+                            />
+                            <div>
+                              <strong>{row.stock_order_items?.stock_orders?.order_number}</strong>
+                              <p className="text-xs text-slate-500">
+                                {row.stock_order_items?.catalog_products?.name}
+                              </p>
+                            </div>
                           </div>
                           <div className="text-right">
                             <Pill
@@ -574,37 +783,144 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                   </Panel>
                 )}
                 {view === "settings" && (
-                  <Panel className="max-w-xl">
-                    <PanelHead
-                      title="Warehouse settings"
-                      description="Historical warehouses can be archived but not deleted."
-                    />
-                    <dl className="grid gap-3 text-sm">
-                      <div>
-                        <dt className="text-slate-500">Code</dt>
-                        <dd className="font-mono">{warehouse.code}</dd>
+                  <div className="grid max-w-4xl gap-4">
+                    <Panel>
+                      <PanelHead
+                        title="Warehouse settings"
+                        description="Historical warehouses can be archived but not deleted."
+                      />
+                      <dl className="grid gap-3 text-sm">
+                        <div>
+                          <dt className="text-slate-500">Code</dt>
+                          <dd className="font-mono">{warehouse.code}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">Address</dt>
+                          <dd>{warehouse.address || "Not set"}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-slate-500">Phone</dt>
+                          <dd>{warehouse.phone || "Not set"}</dd>
+                        </div>
+                      </dl>
+                      <button
+                        className="mt-6 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                        onClick={async () => {
+                          if (window.confirm(`Archive ${warehouse.name}?`)) {
+                            await onArchive();
+                            onBack();
+                          }
+                        }}
+                      >
+                        Archive warehouse
+                      </button>
+                    </Panel>
+                    <Panel>
+                      <PanelHead
+                        title="Product image audit"
+                        description="One public catalog image is shared by warehouses, shop inventory and sales."
+                      >
+                        <button
+                          className={btn}
+                          onClick={() => void refreshImageAudit()}
+                          disabled={auditLoading}
+                        >
+                          {auditLoading ? "Checking…" : "Refresh audit"}
+                        </button>
+                      </PanelHead>
+                      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+                        <AuditMetric label="Valid" value={validImageCount} />
+                        <AuditMetric
+                          label="No image"
+                          value={imageAudit.filter((row) => row.status === "no_image").length}
+                        />
+                        <AuditMetric
+                          label="Missing"
+                          value={imageAudit.filter((row) => row.status === "missing_object").length}
+                        />
+                        <AuditMetric
+                          label="Unused"
+                          value={imageAudit.filter((row) => row.status === "orphaned_object").length}
+                        />
+                        <AuditMetric
+                          label="Duplicate"
+                          value={imageAudit.filter((row) => row.status === "duplicate_reference").length}
+                        />
                       </div>
-                      <div>
-                        <dt className="text-slate-500">Address</dt>
-                        <dd>{warehouse.address || "Not set"}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-slate-500">Phone</dt>
-                        <dd>{warehouse.phone || "Not set"}</dd>
-                      </div>
-                    </dl>
-                    <button
-                      className="mt-6 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
-                      onClick={async () => {
-                        if (window.confirm(`Archive ${warehouse.name}?`)) {
-                          await onArchive();
-                          onBack();
-                        }
-                      }}
-                    >
-                      Archive warehouse
-                    </button>
-                  </Panel>
+                      {auditError ? (
+                        <p className="rounded-lg bg-red-50 p-4 text-sm text-red-700">
+                          {auditError}
+                        </p>
+                      ) : auditLoading && !imageAudit.length ? (
+                        <p className="py-8 text-center text-sm text-slate-500">
+                          Checking product images…
+                        </p>
+                      ) : imageIssues.length ? (
+                        <div className="grid gap-2">
+                          {imageIssues.map((row, index) => (
+                            <div
+                              key={`${row.status}:${row.product_id ?? row.image_path}:${index}`}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-white p-3"
+                            >
+                              <div className="flex min-w-0 items-center gap-3">
+                                <ProductImage
+                                  imagePath={row.image_path}
+                                  alt={row.product_name ?? "Unused product image"}
+                                  className="size-10"
+                                />
+                                <div className="min-w-0">
+                                  <strong className="block truncate text-sm">
+                                    {row.product_name ?? "Unused stored image"}
+                                  </strong>
+                                  <p className="truncate text-xs text-slate-500">
+                                    {imageAuditLabel(row.status)}
+                                    {row.sku ? ` · ${row.sku}` : ""}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                {row.product_id ? (
+                                  <>
+                                    <button
+                                      className={btn}
+                                      disabled={imageSaving}
+                                      onClick={() => chooseManagedImage(row)}
+                                    >
+                                      <ImagePlus className="size-4" />
+                                      {row.image_path ? "Replace" : "Upload"}
+                                    </button>
+                                    {row.image_path && (
+                                      <button
+                                        className={btn}
+                                        disabled={imageSaving}
+                                        onClick={() => void clearManagedImage(row)}
+                                      >
+                                        <Trash2 className="size-4" />
+                                        Remove
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <button
+                                    className={btn}
+                                    disabled={imageSaving}
+                                    onClick={() => void deleteOrphanedImage(row)}
+                                  >
+                                    <Trash2 className="size-4" />
+                                    Delete unused
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="rounded-lg bg-emerald-50 p-4 text-sm text-emerald-700">
+                          All assigned product images are healthy and no unused objects were found.
+                        </p>
+                      )}
+                    </Panel>
+                  </div>
                 )}
               </>
             )}
@@ -618,9 +934,15 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
 function InventoryList({
   rows,
   onAdjust,
+  onImageManage,
+  onImageRemove,
+  imageSaving = false,
 }: {
   rows: InventoryBalance[];
   onAdjust?: (row: InventoryBalance) => void;
+  onImageManage?: (row: InventoryBalance) => void;
+  onImageRemove?: (row: InventoryBalance) => void;
+  imageSaving?: boolean;
 }) {
   if (!rows.length)
     return (
@@ -645,16 +967,45 @@ function InventoryList({
         <tbody>
           {rows.map((row) => (
             <tr key={row.product_id} className="border-b last:border-0">
-              <td className="py-3 font-medium">{row.catalog_products?.name}</td>
+              <td className="py-3 font-medium">
+                <div className="flex items-center gap-2">
+                  <ProductImage
+                    imagePath={row.catalog_products?.image_path}
+                    alt={row.catalog_products?.name ?? "Product"}
+                    className="size-10"
+                  />
+                  <span>{row.catalog_products?.name}</span>
+                </div>
+              </td>
               <td className="font-mono text-xs">{row.catalog_products?.sku}</td>
               <td>{row.quantity}</td>
               <td>{money(Number(row.average_unit_cost))}</td>
               <td>{money(row.quantity * Number(row.average_unit_cost))}</td>
               {onAdjust && (
                 <td>
-                  <button className={btn} onClick={() => onAdjust(row)}>
-                    Correct
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button className={btn} onClick={() => onAdjust(row)}>
+                      Correct
+                    </button>
+                    {onImageManage && (
+                      <button
+                        className={btn}
+                        disabled={imageSaving}
+                        onClick={() => onImageManage(row)}
+                      >
+                        {row.catalog_products?.image_path ? "Replace image" : "Add image"}
+                      </button>
+                    )}
+                    {onImageRemove && row.catalog_products?.image_path && (
+                      <button
+                        className={btn}
+                        disabled={imageSaving}
+                        onClick={() => onImageRemove(row)}
+                      >
+                        Remove image
+                      </button>
+                    )}
+                  </div>
                 </td>
               )}
             </tr>
@@ -663,6 +1014,30 @@ function InventoryList({
       </table>
     </div>
   );
+}
+
+function AuditMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg bg-slate-50 p-3">
+      <p className="text-xs text-slate-500">{label}</p>
+      <strong className="text-xl">{value}</strong>
+    </div>
+  );
+}
+
+function imageAuditLabel(status: ProductImageAudit["status"]) {
+  switch (status) {
+    case "no_image":
+      return "No image assigned";
+    case "missing_object":
+      return "Stored image is missing";
+    case "duplicate_reference":
+      return "Image is shared by multiple products";
+    case "orphaned_object":
+      return "Stored object is not used";
+    default:
+      return "Image is valid";
+  }
 }
 
 function Input({

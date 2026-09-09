@@ -10,7 +10,11 @@ import {
 } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { compressProductImage } from "@/lib/product-images";
+import {
+  removeProductImage as removeStoredProductImage,
+  resolveProductImageUrl,
+  uploadProductImage as uploadStoredProductImage,
+} from "@/lib/product-images";
 import {
   branchLabel as dataBranchLabel,
   shopIds,
@@ -162,50 +166,18 @@ const today = () => new Date().toISOString().slice(0, 10);
 const timeLabel = () =>
   new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 export const branchLabel = dataBranchLabel;
-const PRODUCT_IMAGE_BUCKET = "product-images";
-
 const norm = (v: string) => v.trim().toLowerCase();
-
-async function productImageUrl(path?: string | null) {
-  if (!path) return null;
-  const { data, error } = await supabase.storage
-    .from(PRODUCT_IMAGE_BUCKET)
-    .createSignedUrl(path, 60 * 60);
-  if (error) {
-    console.error("Error signing product image URL:", error);
-    return null;
-  }
-  return data?.signedUrl ?? null;
-}
-
-function imagePathForProduct(sku: string, branch: ShopId) {
-  const safeSku = sku
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/(^-+|-+$)/g, "");
-  return `${getBranchUuid(branch)}/${safeSku || "product"}/${Date.now()}.webp`;
-}
 
 async function uploadProductImage(sku: string, branch: ShopId, file?: File | null) {
   if (!file) return null;
-
-  const image = await compressProductImage(file);
-  const path = imagePathForProduct(sku, branch);
-  const { error } = await supabase.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, image.blob, {
-    cacheControl: "31536000",
-    contentType: "image/webp",
-    upsert: true,
-  });
-
-  if (error) throw error;
-  return path;
+  return uploadStoredProductImage(file, getBranchUuid(branch), sku);
 }
 
 async function removeProductImage(path?: string | null) {
   if (!path) return;
-  const { error } = await supabase.storage.from(PRODUCT_IMAGE_BUCKET).remove([path]);
-  if (error) {
+  try {
+    await removeStoredProductImage(path);
+  } catch (error) {
     console.error("Error removing product image:", error);
   }
 }
@@ -318,7 +290,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           min: Number(balance.min_stock) || 0,
           stock: { [branch]: Number(balance.quantity) || 0 } as Partial<Record<ShopId, number>>,
           imagePath: p.image_path || null,
-          imageUrl: await productImageUrl(p.image_path || null),
+          imageUrl: resolveProductImageUrl(p.image_path || null),
         };
       }));
 
@@ -494,7 +466,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         min: Math.max(0, Number(input.min) || 0),
         stock: { [branch]: quantity } as Partial<Record<ShopId, number>>,
         imagePath,
-        imageUrl: await productImageUrl(imagePath),
+        imageUrl: resolveProductImageUrl(imagePath),
       };
 
       commit(log("Product added", `${product.name} · ${product.sku} · ${product.barcode}`));

@@ -13,6 +13,7 @@ import { productImagePreview } from "@/lib/product-images";
 import { Panel, PanelHead, Pill, EmptyState, MiniCard } from "./primitives";
 import { Scanner } from "./Scanner";
 import { ProductQRCode } from "./QRCode";
+import { ProductImage } from "./ProductImage";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ import {
   type ShopId,
 } from "@/lib/toto-data";
 import { branchLabel, useToto, type SaleLine, type SaveResult } from "@/lib/toto-store";
-import { Camera, ImageIcon, Scan, QrCode, Upload, X } from "lucide-react";
+import { Camera, Scan, QrCode, Upload, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 
@@ -67,20 +68,7 @@ function ProductThumb({
   alt: string;
   className?: string;
 }) {
-  return (
-    <div
-      className={cn(
-        "grid shrink-0 place-items-center overflow-hidden rounded-md border border-border bg-muted text-muted-foreground",
-        className ?? "size-10",
-      )}
-    >
-      {src ? (
-        <img src={src} alt={alt} className="h-full w-full object-cover" loading="lazy" />
-      ) : (
-        <ImageIcon className="size-4" aria-hidden="true" />
-      )}
-    </div>
-  );
+  return <ProductImage imagePath={src} alt={alt} className={className} />;
 }
 
 /* ---------------- Overview ---------------- */
@@ -605,38 +593,56 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
         </PanelHead>
         <div className="grid gap-2">
           {cart.length ? (
-            cart.map((item) => (
-              <div
-                key={item.sku}
-                className="flex items-start justify-between gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"
-              >
-                <div className="flex min-w-0 gap-3">
-                  <ProductThumb src={item.imageUrl} alt={item.name} className="size-10" />
-                  <div className="min-w-0">
-                    <strong className="block truncate text-[12.5px] font-semibold text-slate-800">{item.name}</strong>
-                    <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">{item.sku}</div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <button
-                        className="size-7 rounded-md border border-violet-200 bg-white text-violet-700"
-                        onClick={() => step(item.sku, -1)}
-                        aria-label="Decrease quantity"
-                      >
-                        –
-                      </button>
-                      <strong className="w-5 text-center text-sm text-slate-800">{item.qty}</strong>
-                      <button
-                        className="size-7 rounded-md border border-pink-200 bg-white text-pink-700"
-                        onClick={() => step(item.sku, 1)}
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </button>
+            cart.map((item) => {
+              const currentProduct = products.find(
+                (product) =>
+                  (item.productId && product.id === item.productId) || product.sku === item.sku,
+              );
+              return (
+                <div
+                  key={item.sku}
+                  className="flex items-start justify-between gap-3 rounded-xl border border-violet-100 bg-white/80 p-3"
+                >
+                  <div className="flex min-w-0 gap-3">
+                    <ProductThumb
+                      src={currentProduct?.imageUrl ?? item.imageUrl}
+                      alt={item.name}
+                      className="size-10"
+                    />
+                    <div className="min-w-0">
+                      <strong className="block truncate text-[12.5px] font-semibold text-slate-800">
+                        {item.name}
+                      </strong>
+                      <div className="mt-0.5 truncate font-mono text-[10px] text-slate-500">
+                        {item.sku}
+                      </div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          className="size-7 rounded-md border border-violet-200 bg-white text-violet-700"
+                          onClick={() => step(item.sku, -1)}
+                          aria-label="Decrease quantity"
+                        >
+                          –
+                        </button>
+                        <strong className="w-5 text-center text-sm text-slate-800">
+                          {item.qty}
+                        </strong>
+                        <button
+                          className="size-7 rounded-md border border-pink-200 bg-white text-pink-700"
+                          onClick={() => step(item.sku, 1)}
+                          aria-label="Increase quantity"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
                   </div>
+                  <strong className="font-mono text-sm text-slate-800">
+                    {money(item.sell * item.qty)}
+                  </strong>
                 </div>
-                <strong className="font-mono text-sm text-slate-800">{money(item.sell * item.qty)}</strong>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="rounded-xl border border-dashed border-violet-200 bg-white/60 px-4 py-8 text-center text-[12px] text-slate-500">
               No items on this receipt yet.
@@ -2001,7 +2007,7 @@ export function ReturnsSection({
   cashier: string;
   isOwner: boolean;
 }) {
-  const { sales, returns, recordReturn } = useToto();
+  const { sales, returns, products, recordReturn } = useToto();
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [qty, setQty] = useState<Record<string, number>>({});
@@ -2133,29 +2139,37 @@ export function ReturnsSection({
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
-            {sale?.lines.map((l) => (
-              <div key={l.sku} className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[13px] font-medium">{l.name}</div>
-                  <div className="text-[12px] text-muted-foreground">
-                    sold {l.qty} · {money(l.sell)}
+            {sale?.lines.map((l) => {
+              const product = products.find(
+                (item) => (l.productId && item.id === l.productId) || item.sku === l.sku,
+              );
+              return (
+                <div key={l.sku} className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ProductThumb src={product?.imageUrl} alt={l.name} />
+                    <div>
+                      <div className="text-[13px] font-medium">{l.name}</div>
+                      <div className="text-[12px] text-muted-foreground">
+                        sold {l.qty} · {money(l.sell)}
+                      </div>
+                    </div>
                   </div>
+                  <input
+                    className={cn(field, "w-20")}
+                    type="number"
+                    min={0}
+                    max={l.qty}
+                    value={qty[l.sku] ?? 0}
+                    onChange={(e) =>
+                      setQty((prev) => ({
+                        ...prev,
+                        [l.sku]: Math.max(0, Math.min(l.qty, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
                 </div>
-                <input
-                  className={cn(field, "w-20")}
-                  type="number"
-                  min={0}
-                  max={l.qty}
-                  value={qty[l.sku] ?? 0}
-                  onChange={(e) =>
-                    setQty((prev) => ({
-                      ...prev,
-                      [l.sku]: Math.max(0, Math.min(l.qty, Number(e.target.value) || 0)),
-                    }))
-                  }
-                />
-              </div>
-            ))}
+              );
+            })}
             <Field label="Reason">
               <input className={field} value={reason} onChange={(e) => setReason(e.target.value)} />
             </Field>

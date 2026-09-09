@@ -24,7 +24,23 @@ export type CatalogProduct = {
   unit: string;
   selling_price: number;
   image_path: string | null;
+  created_in_warehouse_id?: string | null;
   is_active: boolean;
+};
+
+export type ProductImageAuditStatus =
+  | "valid"
+  | "no_image"
+  | "missing_object"
+  | "duplicate_reference"
+  | "orphaned_object";
+
+export type ProductImageAudit = {
+  product_id: string | null;
+  sku: string | null;
+  product_name: string | null;
+  image_path: string | null;
+  status: ProductImageAuditStatus;
 };
 
 export type InventoryBalance = {
@@ -331,4 +347,32 @@ export async function adjustWarehouseInventory(
     _reason: reason,
   });
   if (error) throw error;
+}
+
+export async function setCatalogProductImage(productId: string, imagePath: string | null) {
+  const { data, error } = await db.rpc("set_catalog_product_image", {
+    _product_id: productId,
+    _image_path: imagePath,
+  });
+  if (error) throw error;
+  return data as string | null;
+}
+
+export async function loadProductImageAudit(): Promise<ProductImageAudit[]> {
+  const { data, error } = await db.rpc("audit_product_images", {});
+  if (error) throw error;
+  return (data ?? []) as ProductImageAudit[];
+}
+
+export async function isProductImageReferenced(imagePath: string) {
+  const [catalogResult, legacyResult] = await Promise.all([
+    db
+      .from("catalog_products")
+      .select("id", { count: "exact", head: true })
+      .eq("image_path", imagePath),
+    db.from("products").select("id", { count: "exact", head: true }).eq("image_path", imagePath),
+  ]);
+  if (catalogResult.error) throw catalogResult.error;
+  if (legacyResult.error) throw legacyResult.error;
+  return (catalogResult.count ?? 0) + (legacyResult.count ?? 0) > 0;
 }
