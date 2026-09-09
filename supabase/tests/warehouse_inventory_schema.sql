@@ -37,6 +37,16 @@ begin
   end if;
 
   if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'warehouse_availability'
+      and column_name = 'image_path'
+  ) then
+    raise exception 'Warehouse availability must expose the catalog image path';
+  end if;
+
+  if not exists (
     select 1 from storage.buckets
     where id = 'product-images'
       and public

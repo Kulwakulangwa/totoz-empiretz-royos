@@ -108,6 +108,18 @@ export type WarehouseReceipt = {
   }>;
 };
 
+async function loadCatalogProductsById(productIds: string[]) {
+  const uniqueIds = [...new Set(productIds.filter(Boolean))];
+  if (!uniqueIds.length) return new Map<string, CatalogProduct>();
+
+  const { data, error } = await db
+    .from("catalog_products")
+    .select("*")
+    .in("id", uniqueIds);
+  if (error) throw error;
+  return new Map((data ?? []).map((product) => [product.id, product as CatalogProduct]));
+}
+
 export function useLocations(includeArchived = false) {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -202,7 +214,13 @@ export function useLocations(includeArchived = false) {
 export async function loadWarehouseAvailability(): Promise<WarehouseAvailability[]> {
   const { data, error } = await db.from("warehouse_availability").select("*").order("product_name");
   if (error) throw error;
-  return (data ?? []) as WarehouseAvailability[];
+  const rows = (data ?? []) as WarehouseAvailability[];
+  const catalogById = await loadCatalogProductsById(rows.map((row) => row.product_id));
+
+  return rows.map((row) => {
+    const product = catalogById.get(row.product_id);
+    return product ? { ...row, image_path: product.image_path } : row;
+  });
 }
 
 export async function loadStockOrders(shopId: string): Promise<StockOrder[]> {
@@ -216,7 +234,22 @@ export async function loadStockOrders(shopId: string): Promise<StockOrder[]> {
     .eq("destination_shop_id", shopId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (data ?? []) as unknown as StockOrder[];
+  const orders = (data ?? []) as unknown as StockOrder[];
+  const productIds = orders.flatMap(
+    (order) => order.stock_order_items?.map((item) => item.product_id) ?? [],
+  );
+  const catalogById = await loadCatalogProductsById(productIds);
+
+  return orders.map((order) => {
+    if (!order.stock_order_items) return order;
+    return {
+      ...order,
+      stock_order_items: order.stock_order_items.map((item) => {
+        const product = catalogById.get(item.product_id);
+        return product ? { ...item, catalog_products: product } : item;
+      }),
+    };
+  });
 }
 
 export async function createStockOrder(
@@ -240,11 +273,17 @@ export async function reverseStockOrder(orderId: string, reason: string) {
 export async function loadWarehouseInventory(warehouseId: string): Promise<InventoryBalance[]> {
   const { data, error } = await db
     .from("inventory_balances")
-    .select("*, catalog_products(*)")
+    .select("*")
     .eq("location_id", warehouseId)
     .order("quantity", { ascending: true });
   if (error) throw error;
-  return (data ?? []) as unknown as InventoryBalance[];
+  const rows = (data ?? []) as InventoryBalance[];
+  const catalogById = await loadCatalogProductsById(rows.map((row) => row.product_id));
+
+  return rows.map((row) => {
+    const product = catalogById.get(row.product_id);
+    return product ? { ...row, catalog_products: product } : row;
+  });
 }
 
 export async function loadCatalog(): Promise<CatalogProduct[]> {
