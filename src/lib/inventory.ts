@@ -200,11 +200,25 @@ export function useLocations(includeArchived = false) {
     id: string,
     patch: Partial<Pick<Location, "name" | "address" | "phone" | "is_active">>,
   ) => {
-    const { error } = await db
+    const { data, error } = await db
       .from("branches")
       .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .select("id,name,code,location_type,address,phone,is_active")
+      .maybeSingle();
     if (error) throw error;
+    if (!data) {
+      throw new Error("Location could not be updated. Please check your access and try again.");
+    }
+
+    if (patch.is_active === false && !includeArchived) {
+      const nextLocations = locations.filter((location) => location.id !== id);
+      prevLocationsRef.current = JSON.stringify({ includeArchived, data: nextLocations });
+      setLocations(nextLocations);
+      registerBranchLabels(nextLocations);
+      return;
+    }
+
     await refresh();
   };
 

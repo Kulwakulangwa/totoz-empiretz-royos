@@ -71,8 +71,13 @@ function DashboardInner() {
     setToday(new Date().toISOString().slice(0, 10));
   }, []);
 
+  const activeLocations = useMemo(
+    () => locations.filter((location) => location.is_active),
+    [locations],
+  );
+
   const accessibleBranches = useMemo(() => {
-    const shops = locations.filter((location) => location.location_type === "shop");
+    const shops = activeLocations.filter((location) => location.location_type === "shop");
     if (isOwner) return shops;
     if (staffProfile) {
       const branchId = staffProfile.branch?.id ?? staffProfile.branch_id;
@@ -80,7 +85,12 @@ function DashboardInner() {
       return assignedBranch ? [assignedBranch] : [];
     }
     return [];
-  }, [isOwner, staffProfile, locations]);
+  }, [isOwner, staffProfile, activeLocations]);
+
+  const warehouses = useMemo(
+    () => activeLocations.filter((location) => location.location_type === "warehouse"),
+    [activeLocations],
+  );
 
   // All‑shop metrics (total)
   const allRevenue = sales.reduce((sum, s) => sum + s.total, 0);
@@ -160,6 +170,32 @@ function DashboardInner() {
     }
   }, [authLoading, accessibleBranches, isOwner, selectedBranch, showBranchSelector]);
 
+  useEffect(() => {
+    if (locationsLoading) return;
+
+    if (
+      selectedLocation &&
+      !activeLocations.some((location) => location.id === selectedLocation.id)
+    ) {
+      setSelectedLocation(null);
+      setShowBranchSelector(true);
+    }
+
+    if (selectedBranch && !accessibleBranches.some((branch) => branch.id === selectedBranch)) {
+      setSelectedBranch(null);
+      setShowBranchSelector(true);
+    }
+  }, [
+    locationsLoading,
+    activeLocations,
+    accessibleBranches,
+    selectedLocation,
+    selectedBranch,
+    setSelectedLocation,
+    setSelectedBranch,
+    setShowBranchSelector,
+  ]);
+
   if (authLoading || storeLoading || locationsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -202,7 +238,7 @@ function DashboardInner() {
     return (
       <BranchSelectionPage
         shops={branchSummaries}
-        warehouses={locations.filter((location) => location.location_type === "warehouse")}
+        warehouses={warehouses}
         onSelectLocation={(location) => {
           setSelectedLocation(location);
           setSelectedBranch(location.location_type === "shop" ? location.id : null);
@@ -250,7 +286,7 @@ function DashboardInner() {
   }
 
   const effectiveShop = selectedBranch;
-  const data = locations.find((b) => b.id === effectiveShop) ?? accessibleBranches[0]!;
+  const data = activeLocations.find((b) => b.id === effectiveShop) ?? accessibleBranches[0]!;
   const visibleNav = canManageBranch
     ? navItems
     : [
