@@ -7,6 +7,7 @@ import {
   PackagePlus,
   Warehouse,
   ImagePlus,
+  Pencil,
   Trash2,
   X,
 } from "lucide-react";
@@ -21,10 +22,11 @@ import {
   loadWarehouseReceipts,
   receiveWarehouseStock,
   receiveNewWarehouseProduct,
-  adjustWarehouseInventory,
+  archiveCatalogProduct,
   isProductImageReferenced,
   loadProductImageAudit,
   setCatalogProductImage,
+  updateWarehouseProduct,
   type CatalogProduct,
   type InventoryBalance,
   type Location,
@@ -40,6 +42,14 @@ import {
 } from "@/lib/product-images";
 import { ProductImage } from "./ProductImage";
 import { useToto } from "@/lib/toto-store";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type View = "overview" | "inventory" | "receive" | "orders" | "settings";
 type ServedAllocation = {
@@ -49,6 +59,18 @@ type ServedAllocation = {
     stock_orders?: { order_number: string; status: "completed" | "reversed" };
     catalog_products?: { name: string; image_path: string | null };
   };
+};
+type WarehouseProductForm = {
+  name: string;
+  sku: string;
+  barcode: string;
+  category: string;
+  unit: string;
+  sellingPrice: string;
+  description: string;
+  quantity: string;
+  averageCost: string;
+  minStock: string;
 };
 const errorMessage = (error: unknown) => {
   if (error instanceof Error) return error.message;
@@ -80,21 +102,21 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
   const [served, setServed] = useState<ServedAllocation[]>([]);
   const [receipts, setReceipts] = useState<WarehouseReceipt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [productId, setProductId] = usePersistentState(
+  const [productId, setProductId, clearProductId] = usePersistentState(
     `totoz.warehouse.${warehouse.id}.productId`,
     "",
   );
-  const [quantity, setQuantity] = usePersistentState(
+  const [quantity, setQuantity, clearQuantity] = usePersistentState(
     `totoz.warehouse.${warehouse.id}.quantity`,
     "",
   );
-  const [cost, setCost] = usePersistentState(`totoz.warehouse.${warehouse.id}.cost`, "");
-  const [notes, setNotes] = usePersistentState(`totoz.warehouse.${warehouse.id}.notes`, "");
-  const [newProduct, setNewProduct] = usePersistentState(
+  const [cost, setCost, clearCost] = usePersistentState(`totoz.warehouse.${warehouse.id}.cost`, "");
+  const [notes, setNotes, clearNotes] = usePersistentState(`totoz.warehouse.${warehouse.id}.notes`, "");
+  const [newProduct, setNewProduct, clearNewProduct] = usePersistentState(
     `totoz.warehouse.${warehouse.id}.newProduct`,
     false,
   );
-  const [productForm, setProductForm] = usePersistentState(
+  const [productForm, setProductForm, clearProductForm] = usePersistentState(
     `totoz.warehouse.${warehouse.id}.productForm`,
     {
       name: "",
@@ -116,6 +138,14 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const manageImageInputRef = useRef<HTMLInputElement | null>(null);
   const imageProductRef = useRef<ProductImageAudit | null>(null);
+  const editGalleryInputRef = useRef<HTMLInputElement | null>(null);
+  const editCameraInputRef = useRef<HTMLInputElement | null>(null);
+  const [editingRow, setEditingRow] = useState<InventoryBalance | null>(null);
+  const [editForm, setEditForm] = useState<WarehouseProductForm | null>(null);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [removeEditImage, setRemoveEditImage] = useState(false);
+  const [productSaving, setProductSaving] = useState(false);
 
   const handleImageSelect = (file?: File) => {
     if (!file) return;
@@ -254,19 +284,12 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
       }
 
       toast("Warehouse stock received");
-      setProductId("");
-      setQuantity("");
-      setCost("");
-      setNotes("");
-      setNewProduct(false);
-      setProductForm({
-        name: "",
-        sku: "",
-        barcode: "",
-        category: "",
-        unit: "pcs",
-        selling_price: "",
-      });
+      clearProductId();
+      clearQuantity();
+      clearCost();
+      clearNotes();
+      clearNewProduct();
+      clearProductForm();
       clearImage();
 
       try {
@@ -383,38 +406,146 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     }
   };
 
-  const auditRowForInventory = (row: InventoryBalance): ProductImageAudit | null => {
-    const product = row.catalog_products;
-    if (!product) return null;
-    return (
-      imageAudit.find((item) => item.product_id === product.id) ?? {
-        product_id: product.id,
-        sku: product.sku,
-        product_name: product.name,
-        image_path: product.image_path,
-        status: product.image_path ? "valid" : "no_image",
-      }
-    );
+  const closeProductEditor = () => {
+    if (editImagePreview?.startsWith("blob:")) URL.revokeObjectURL(editImagePreview);
+    setEditingRow(null);
+    setEditForm(null);
+    setEditImageFile(null);
+    setEditImagePreview(null);
+    setRemoveEditImage(false);
   };
 
-  const correctStock = async (row: InventoryBalance) => {
-    const raw = window.prompt(
-      `Quantity correction for ${row.catalog_products?.name}. Use a negative number to reduce stock.`,
-    );
-    if (raw === null) return;
-    const delta = Number(raw);
-    if (!Number.isInteger(delta) || delta === 0) {
-      toast("Enter a non-zero whole number.");
+  const openProductEditor = (row: InventoryBalance) => {
+    const product = row.catalog_products;
+    if (!product) return;
+    setEditingRow(row);
+    setEditForm({
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode ?? "",
+      category: product.category ?? "",
+      unit: product.unit,
+      sellingPrice: String(product.selling_price),
+      description: product.description ?? "",
+      quantity: String(row.quantity),
+      averageCost: String(row.average_unit_cost),
+      minStock: String(row.min_stock),
+    });
+    setEditImageFile(null);
+    setEditImagePreview(null);
+    setRemoveEditImage(false);
+  };
+
+  const chooseEditImage = (file?: File) => {
+    if (!file) return;
+    try {
+      if (editImagePreview?.startsWith("blob:")) URL.revokeObjectURL(editImagePreview);
+      setEditImageFile(file);
+      setEditImagePreview(productImagePreview(file));
+      setRemoveEditImage(false);
+    } catch (error) {
+      toast("Image could not be processed", { description: errorMessage(error) });
+    }
+  };
+
+  const removeEditorImage = () => {
+    if (editImagePreview?.startsWith("blob:")) URL.revokeObjectURL(editImagePreview);
+    setEditImageFile(null);
+    setEditImagePreview(null);
+    setRemoveEditImage(true);
+  };
+
+  const saveProductEditor = async () => {
+    const row = editingRow;
+    const form = editForm;
+    const product = row?.catalog_products;
+    if (!row || !form || !product) return;
+
+    const nextQuantity = Number(form.quantity);
+    const nextAverageCost = Number(form.averageCost);
+    const nextMinStock = Number(form.minStock);
+    const nextSellingPrice = Number(form.sellingPrice);
+    if (!form.name.trim() || !form.sku.trim()) {
+      toast("Product name and SKU are required.");
       return;
     }
-    const reason = window.prompt("Reason for this correction?");
-    if (!reason?.trim()) return;
+    if (
+      !Number.isInteger(nextQuantity) || nextQuantity < 0 ||
+      !Number.isInteger(nextMinStock) || nextMinStock < 0 ||
+      !Number.isFinite(nextAverageCost) || nextAverageCost < 0 ||
+      !Number.isFinite(nextSellingPrice) || nextSellingPrice < 0
+    ) {
+      toast("Quantity and minimum stock must be whole numbers; prices cannot be negative.");
+      return;
+    }
+
+    setProductSaving(true);
+    let uploadedPath: string | null = null;
+    let saved = false;
     try {
-      await adjustWarehouseInventory(warehouse.id, row.product_id, delta, reason);
-      toast("Stock corrected");
-      await refresh();
-    } catch (error: unknown) {
-      toast("Correction failed", { description: errorMessage(error) });
+      if (editImageFile) {
+        uploadedPath = await uploadProductImage(editImageFile, warehouse.id, form.sku);
+      }
+      const nextImagePath = uploadedPath ?? (removeEditImage ? null : product.image_path);
+      await updateWarehouseProduct(warehouse.id, row.product_id, {
+        name: form.name.trim(),
+        sku: form.sku.trim(),
+        barcode: form.barcode.trim() || null,
+        category: form.category.trim() || null,
+        unit: form.unit.trim() || "pcs",
+        selling_price: nextSellingPrice,
+        description: form.description.trim() || null,
+        image_path: nextImagePath,
+        quantity: nextQuantity,
+        average_unit_cost: nextAverageCost,
+        min_stock: nextMinStock,
+      });
+      saved = true;
+
+      if (product.image_path && product.image_path !== nextImagePath) {
+        try {
+          const stillReferenced = await isProductImageReferenced(product.image_path);
+          if (!stillReferenced) await removeProductImage(product.image_path);
+        } catch (cleanupError) {
+          console.warn("[WarehouseDashboard] edited image cleanup error", cleanupError);
+        }
+      }
+
+      toast("Product updated", { description: form.name.trim() });
+      closeProductEditor();
+      await Promise.all([refresh(), refreshData()]);
+      if (view === "settings") await refreshImageAudit();
+    } catch (error) {
+      if (uploadedPath && !saved) {
+        try {
+          await removeProductImage(uploadedPath);
+        } catch (cleanupError) {
+          console.warn("[WarehouseDashboard] edit upload cleanup error", cleanupError);
+        }
+      }
+      toast("Product could not be updated", { description: errorMessage(error) });
+    } finally {
+      setProductSaving(false);
+    }
+  };
+
+  const deleteProduct = async (row: InventoryBalance) => {
+    const product = row.catalog_products;
+    if (!product) return;
+    const confirmed = window.confirm(
+      `Delete ${product.name}? This removes it from every warehouse, shop inventory and point of sale, while keeping historical records.`,
+    );
+    if (!confirmed) return;
+
+    setProductSaving(true);
+    try {
+      await archiveCatalogProduct(row.product_id);
+      toast("Product deleted", { description: product.name });
+      await Promise.all([refresh(), refreshData()]);
+    } catch (error) {
+      toast("Product could not be deleted", { description: errorMessage(error) });
+    } finally {
+      setProductSaving(false);
     }
   };
 
@@ -440,6 +571,100 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
           event.target.value = "";
         }}
       />
+      <Dialog
+        open={Boolean(editingRow && editForm)}
+        onOpenChange={(open) => {
+          if (!open && !productSaving) closeProductEditor();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit warehouse product</DialogTitle>
+            <DialogDescription>
+              Update the product details, image, warehouse quantity, cost and minimum stock in one form.
+            </DialogDescription>
+          </DialogHeader>
+          {editingRow && editForm && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <span className="text-xs font-medium text-slate-600">Product image</span>
+                <div className="mt-1 flex items-center gap-3 rounded-lg border bg-white p-3">
+                  {editImagePreview ? (
+                    <img
+                      src={editImagePreview}
+                      alt={editForm.name || "Product preview"}
+                      className="size-16 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <ProductImage
+                      imagePath={removeEditImage ? null : editingRow.catalog_products?.image_path}
+                      alt={editForm.name || "Product"}
+                      className="size-16"
+                    />
+                  )}
+                  <div className="flex flex-1 flex-wrap gap-2">
+                    <button className={btn} type="button" onClick={() => editCameraInputRef.current?.click()}>
+                      <ImagePlus className="size-4" /> Camera
+                    </button>
+                    <button className={btn} type="button" onClick={() => editGalleryInputRef.current?.click()}>
+                      <ImagePlus className="size-4" /> Gallery
+                    </button>
+                    {(editImagePreview || (!removeEditImage && editingRow.catalog_products?.image_path)) && (
+                      <button className={btn} type="button" onClick={removeEditorImage}>
+                        <X className="size-4" /> Remove
+                      </button>
+                    )}
+                    <input
+                      ref={editCameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="sr-only"
+                      onChange={(event) => {
+                        chooseEditImage(event.target.files?.[0]);
+                        event.target.value = "";
+                      }}
+                    />
+                    <input
+                      ref={editGalleryInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(event) => {
+                        chooseEditImage(event.target.files?.[0]);
+                        event.target.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <Input label="Product name" value={editForm.name} onChange={(name) => setEditForm({ ...editForm, name })} />
+              <Input label="SKU" value={editForm.sku} onChange={(sku) => setEditForm({ ...editForm, sku })} />
+              <Input label="Barcode" value={editForm.barcode} onChange={(barcode) => setEditForm({ ...editForm, barcode })} />
+              <Input label="Category" value={editForm.category} onChange={(category) => setEditForm({ ...editForm, category })} />
+              <Input label="Unit" value={editForm.unit} onChange={(unit) => setEditForm({ ...editForm, unit })} />
+              <Input label="Selling price" type="number" value={editForm.sellingPrice} onChange={(sellingPrice) => setEditForm({ ...editForm, sellingPrice })} />
+              <Input label="Warehouse quantity" type="number" integer value={editForm.quantity} onChange={(quantity) => setEditForm({ ...editForm, quantity })} />
+              <Input label="Average buying cost" type="number" value={editForm.averageCost} onChange={(averageCost) => setEditForm({ ...editForm, averageCost })} />
+              <Input label="Minimum stock" type="number" integer value={editForm.minStock} onChange={(minStock) => setEditForm({ ...editForm, minStock })} />
+              <label className="grid gap-1.5 sm:col-span-2">
+                <span className="text-xs font-medium text-slate-600">Description</span>
+                <textarea
+                  className="min-h-20 rounded-lg border bg-white p-3 text-sm"
+                  value={editForm.description}
+                  onChange={(event) => setEditForm({ ...editForm, description: event.target.value })}
+                />
+              </label>
+            </div>
+          )}
+          <DialogFooter>
+            <button className={btn} disabled={productSaving} onClick={closeProductEditor}>Cancel</button>
+            <button className={btnPrimary} disabled={productSaving} onClick={() => void saveProductEditor()}>
+              {productSaving ? "Saving…" : "Save changes"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="mx-auto flex min-h-[92vh] max-w-[1440px] flex-col overflow-hidden rounded-3xl bg-slate-100 shadow-2xl">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-5 py-4 text-white">
           <button onClick={onBack} className="flex items-center gap-2 text-sm text-slate-300">
@@ -555,16 +780,9 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                     </PanelHead>
                     <InventoryList
                       rows={inventory}
-                      onAdjust={correctStock}
-                      onImageManage={(row) => {
-                        const auditRow = auditRowForInventory(row);
-                        if (auditRow) chooseManagedImage(auditRow);
-                      }}
-                      onImageRemove={(row) => {
-                        const auditRow = auditRowForInventory(row);
-                        if (auditRow) void clearManagedImage(auditRow);
-                      }}
-                      imageSaving={imageSaving}
+                      onEdit={openProductEditor}
+                      onDelete={(row) => void deleteProduct(row)}
+                      saving={productSaving}
                     />
                   </Panel>
                 )}
@@ -933,16 +1151,14 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
 
 function InventoryList({
   rows,
-  onAdjust,
-  onImageManage,
-  onImageRemove,
-  imageSaving = false,
+  onEdit,
+  onDelete,
+  saving = false,
 }: {
   rows: InventoryBalance[];
-  onAdjust?: (row: InventoryBalance) => void;
-  onImageManage?: (row: InventoryBalance) => void;
-  onImageRemove?: (row: InventoryBalance) => void;
-  imageSaving?: boolean;
+  onEdit?: (row: InventoryBalance) => void;
+  onDelete?: (row: InventoryBalance) => void;
+  saving?: boolean;
 }) {
   if (!rows.length)
     return (
@@ -961,7 +1177,7 @@ function InventoryList({
             <th>Quantity</th>
             <th>Average cost</th>
             <th>Value</th>
-            {onAdjust && <th />}
+            {onEdit && <th />}
           </tr>
         </thead>
         <tbody>
@@ -981,28 +1197,21 @@ function InventoryList({
               <td>{row.quantity}</td>
               <td>{money(Number(row.average_unit_cost))}</td>
               <td>{money(row.quantity * Number(row.average_unit_cost))}</td>
-              {onAdjust && (
+              {onEdit && (
                 <td>
                   <div className="flex flex-wrap gap-2">
-                    <button className={btn} onClick={() => onAdjust(row)}>
-                      Correct
+                    <button className={btn} disabled={saving} onClick={() => onEdit(row)}>
+                      <Pencil className="size-4" />
+                      Edit
                     </button>
-                    {onImageManage && (
+                    {onDelete && (
                       <button
-                        className={btn}
-                        disabled={imageSaving}
-                        onClick={() => onImageManage(row)}
+                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-3 text-[13px] font-medium text-red-600 hover:bg-red-50"
+                        disabled={saving}
+                        onClick={() => onDelete(row)}
                       >
-                        {row.catalog_products?.image_path ? "Replace image" : "Add image"}
-                      </button>
-                    )}
-                    {onImageRemove && row.catalog_products?.image_path && (
-                      <button
-                        className={btn}
-                        disabled={imageSaving}
-                        onClick={() => onImageRemove(row)}
-                      >
-                        Remove image
+                        <Trash2 className="size-4" />
+                        Delete
                       </button>
                     )}
                   </div>
@@ -1045,11 +1254,13 @@ function Input({
   value,
   onChange,
   type = "text",
+  integer = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  integer?: boolean;
 }) {
   return (
     <label className="grid gap-1.5">
@@ -1057,7 +1268,7 @@ function Input({
       <input
         type={type}
         min={type === "number" ? 0 : undefined}
-        step={type === "number" ? "any" : undefined}
+        step={type === "number" ? (integer ? "1" : "any") : undefined}
         className="min-h-10 rounded-lg border bg-white px-3 text-sm"
         value={value}
         onChange={(event) => onChange(event.target.value)}

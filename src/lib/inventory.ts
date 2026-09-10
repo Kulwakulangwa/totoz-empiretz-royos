@@ -23,6 +23,7 @@ export type CatalogProduct = {
   category: string | null;
   unit: string;
   selling_price: number;
+  description: string | null;
   image_path: string | null;
   created_in_warehouse_id?: string | null;
   is_active: boolean;
@@ -297,7 +298,7 @@ export async function loadWarehouseInventory(warehouseId: string): Promise<Inven
   return rows.map((row) => {
     const product = catalogById.get(row.product_id);
     return product ? { ...row, catalog_products: product } : row;
-  });
+  }).filter((row) => row.catalog_products?.is_active);
 }
 
 export async function loadCatalog(): Promise<CatalogProduct[]> {
@@ -400,6 +401,44 @@ export async function adjustWarehouseInventory(
     _reason: reason,
   });
   if (error) throw error;
+}
+
+export type WarehouseProductUpdate = {
+  name: string;
+  sku: string;
+  barcode: string | null;
+  category: string | null;
+  unit: string;
+  selling_price: number;
+  description: string | null;
+  image_path: string | null;
+  quantity: number;
+  average_unit_cost: number;
+  min_stock: number;
+};
+
+export async function updateWarehouseProduct(
+  warehouseId: string,
+  productId: string,
+  input: WarehouseProductUpdate,
+) {
+  const { error } = await db.rpc("update_warehouse_product", {
+    _warehouse_id: warehouseId,
+    _product_id: productId,
+    _payload: input,
+  });
+  if (error) throw error;
+}
+
+export async function archiveCatalogProduct(productId: string) {
+  const { data, error } = await db
+    .from("catalog_products")
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq("id", productId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Product could not be deleted. Please check your access and try again.");
 }
 
 export async function setCatalogProductImage(productId: string, imagePath: string | null) {

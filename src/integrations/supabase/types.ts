@@ -424,6 +424,7 @@ export type Database = {
       create_shop_sale: { Args: { _shop_id: string; _payment_method: string; _lines: Json }; Returns: string }
       restock_shop_inventory: { Args: { _shop_id: string; _product_id: string; _quantity: number; _reference_id?: string | null }; Returns: undefined }
       adjust_warehouse_inventory: { Args: { _warehouse_id: string; _product_id: string; _quantity_delta: number; _reason: string }; Returns: undefined }
+      update_warehouse_product: { Args: { _warehouse_id: string; _product_id: string; _payload: Json }; Returns: undefined }
       set_catalog_product_image: { Args: { _product_id: string; _image_path: string | null }; Returns: string | null }
       audit_product_images: { Args: Record<PropertyKey, never>; Returns: Array<{ product_id: string | null; sku: string | null; product_name: string | null; image_path: string | null; status: "valid" | "no_image" | "missing_object" | "duplicate_reference" | "orphaned_object" }> }
     }

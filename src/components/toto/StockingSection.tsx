@@ -23,11 +23,11 @@ export function StockingSection({ shopId, shopName }: Props) {
   const { refreshData } = useToto();
   const [availability, setAvailability] = useState<WarehouseAvailability[]>([]);
   const [orders, setOrders] = useState<StockOrder[]>([]);
-  const [quantities, setQuantities] = usePersistentState<Record<string, string>>(
+  const [quantities, setQuantities, clearQuantities] = usePersistentState<Record<string, string>>(
     `totoz.stocking.${shopId}.quantities`,
     {},
   );
-  const [query, setQuery] = usePersistentState(`totoz.stocking.${shopId}.query`, "");
+  const [query, setQuery, clearQuery] = usePersistentState(`totoz.stocking.${shopId}.query`, "");
   const [historyQuery, setHistoryQuery] = usePersistentState(
     `totoz.stocking.${shopId}.historyQuery`,
     "",
@@ -36,7 +36,7 @@ export function StockingSection({ shopId, shopName }: Props) {
     `totoz.stocking.${shopId}.status`,
     "all",
   );
-  const [creating, setCreating] = usePersistentState(
+  const [creating, setCreating, clearCreating] = usePersistentState(
     `totoz.stocking.${shopId}.creating`,
     false,
   );
@@ -141,8 +141,9 @@ export function StockingSection({ shopId, shopName }: Props) {
     try {
       await createStockOrder(shopId, allocations);
       toast("Stocking order completed", { description: `Stock is now available at ${shopName}.` });
-      setQuantities({});
-      setCreating(false);
+      clearQuantities();
+      clearQuery();
+      clearCreating();
       await Promise.all([refresh(), refreshData()]);
     } catch (error: unknown) {
       toast("Order could not be completed", { description: errorMessage(error) });

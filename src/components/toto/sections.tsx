@@ -225,9 +225,9 @@ type CartItem = SaleLine & { stock: number; imageUrl?: string | null | undefined
 export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string }) {
   const { products, recordSale, receipt } = useToto();
   const activeBranch: ShopId = shop === "all" ? "toto" : shop;
-  const [query, setQuery] = usePersistentState(`totoz.pos.${activeBranch}.query`, "");
-  const [cart, setCart] = usePersistentState<CartItem[]>(`totoz.pos.${activeBranch}.cart`, []);
-  const [pay, setPay] = usePersistentState<"Cash" | "Lipa Namba">(
+  const [query, setQuery, clearQuery] = usePersistentState(`totoz.pos.${activeBranch}.query`, "");
+  const [cart, setCart, clearCart] = usePersistentState<CartItem[]>(`totoz.pos.${activeBranch}.cart`, []);
+  const [pay, setPay, clearPay] = usePersistentState<"Cash" | "Lipa Namba">(
     `totoz.pos.${activeBranch}.payment`,
     "Cash",
   );
@@ -382,6 +382,12 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
 
   const total = cart.reduce((sum, i) => sum + i.sell * i.qty, 0);
   const count = cart.reduce((sum, i) => sum + i.qty, 0);
+
+  function clearCompletedSale() {
+    clearQuery();
+    clearCart();
+    clearPay();
+  }
 
   function renderReceiptWindow(sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number }) {
     const rows = sale.lines
@@ -697,10 +703,13 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                 description: `${assigned} · ${cashier} · ${pay} · ${money(sale.total)}`,
               });
 
+              // The sale is already committed at this point. Clear the persisted
+              // draft before printing or navigation can interrupt the next render.
+              clearCompletedSale();
+              focusInput();
+
               if (isMobileLayout) {
                 renderReceiptWindow(sale);
-                setCart([]);
-                focusInput();
                 return;
               }
 
@@ -711,9 +720,6 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                 if (printWindow) printWindow.close();
                 throw error;
               }
-
-              setCart([]);
-              focusInput();
             } catch (err: any) {
               toast("Sale could not be completed", {
                 description: err?.message || "Please try again.",
@@ -1394,9 +1400,9 @@ export function InventorySection({ shop, readOnly = true }: { shop: BranchId; re
 export function ExpensesSection({ shop }: { shop: BranchId }) {
   const { expenses, addExpense, removeExpense } = useToto();
   const fixedBranch: BranchId = shop === "all" ? "toto" : shop;
-  const [open, setOpen] = usePersistentState(`totoz.expenses.${fixedBranch}.open`, false);
+  const [open, setOpen, clearOpen] = usePersistentState(`totoz.expenses.${fixedBranch}.open`, false);
   // FIX 2: Initial date is empty string to prevent hydration error
-  const [form, setForm] = usePersistentState(`totoz.expenses.${fixedBranch}.form`, {
+  const [form, setForm, clearForm] = usePersistentState(`totoz.expenses.${fixedBranch}.form`, {
     date: "",
     branch: fixedBranch,
     category: expenseCategories[0] ?? "Other",
@@ -1551,23 +1557,36 @@ export function ExpensesSection({ shop }: { shop: BranchId }) {
             </button>
             <button
               className={btnPrimary}
-              onClick={() => {
+              onClick={async () => {
                 const amount = Number(form.amount);
                 if (!amount || amount <= 0) {
                   toast("Enter a valid expense amount.");
                   return;
                 }
-                addExpense({
-                  id: crypto.randomUUID(),
-                  date: form.date,
-                  branch: fixedBranch,
-                  category: form.category,
-                  description: form.description.trim() || form.category,
-                  amount,
-                });
-                toast("Expense recorded", { description: money(amount) });
-                setForm({ ...form, description: "", amount: "" });
-                setOpen(false);
+                try {
+                  await addExpense({
+                    id: crypto.randomUUID(),
+                    date: form.date,
+                    branch: fixedBranch,
+                    category: form.category,
+                    description: form.description.trim() || form.category,
+                    amount,
+                  });
+                  toast("Expense recorded", { description: money(amount) });
+                  clearForm();
+                  setForm({
+                    date: new Date().toISOString().slice(0, 10),
+                    branch: fixedBranch,
+                    category: expenseCategories[0] ?? "Other",
+                    description: "",
+                    amount: "",
+                  });
+                  clearOpen();
+                } catch (error: unknown) {
+                  toast("Expense could not be recorded", {
+                    description: error instanceof Error ? error.message : "Please try again.",
+                  });
+                }
               }}
             >
               Save expense

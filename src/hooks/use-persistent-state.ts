@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type StorageArea = "local" | "session";
 
@@ -23,6 +23,8 @@ export function usePersistentState<T>(
     serialize = JSON.stringify,
     deserialize = JSON.parse,
   } = options;
+
+  const initialValueRef = useRef(initialValue);
 
   const [value, setValue] = useState<T>(() => {
     const fallback = typeof initialValue === "function"
@@ -52,7 +54,14 @@ export function usePersistentState<T>(
   }, [key, serialize, storage, value]);
 
   const clear = useCallback(() => {
+    const fallback = typeof initialValueRef.current === "function"
+      ? (initialValueRef.current as () => T)()
+      : initialValueRef.current;
+
+    // Reset both layers immediately. Removing only the storage entry leaves the
+    // in-memory value alive and it can be persisted again during the next render.
     storageFor(storage)?.removeItem(key);
+    setValue(fallback);
   }, [key, storage]);
 
   return [value, setValue, clear] as const;

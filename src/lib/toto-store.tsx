@@ -275,7 +275,11 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       const { data: productsData, error: productsError } = await productsQuery;
       if (productsError) throw productsError;
 
-      const mappedProducts: Product[] = await Promise.all((productsData || []).map(async (balance: any) => {
+      const activeProductBalances = (productsData || []).filter(
+        (balance: { catalog_products?: { is_active?: boolean } }) =>
+          balance.catalog_products?.is_active,
+      );
+      const mappedProducts: Product[] = await Promise.all(activeProductBalances.map(async (balance: any) => {
         const p = balance.catalog_products;
         const branch = balance.location_id;
         return {
@@ -726,6 +730,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
       await refreshData();
     } catch (err: any) {
       console.error('Error adding expense:', err);
+      throw err;
     }
   }, [commit, refreshData]);
 
