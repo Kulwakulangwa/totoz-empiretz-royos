@@ -1176,7 +1176,7 @@ function InventoryList({
             <th>SKU</th>
             <th>Quantity</th>
             <th>Average cost</th>
-            <th>Value</th>
+            <th>Selling price</th>
             {onEdit && <th />}
           </tr>
         </thead>
@@ -1196,7 +1196,7 @@ function InventoryList({
               <td className="font-mono text-xs">{row.catalog_products?.sku}</td>
               <td>{row.quantity}</td>
               <td>{money(Number(row.average_unit_cost))}</td>
-              <td>{money(row.quantity * Number(row.average_unit_cost))}</td>
+              <td>{money(Number(row.catalog_products?.selling_price ?? 0))}</td>
               {onEdit && (
                 <td>
                   <div className="flex flex-wrap gap-2">
