@@ -38,6 +38,7 @@ export type Sale = {
   cashier: string;
   payment: "Cash" | "Lipa Namba";
   lines: SaleLine[];
+  discount: number;
   total: number;
   cost: number;
   vat: number;
@@ -141,6 +142,7 @@ type Ctx = State & {
     cashier: string;
     payment: "Cash" | "Lipa Namba";
     lines: SaleLine[];
+    discount: number;
   }) => Promise<Sale>;
   recordReturn: (input: {
     saleId: string;
@@ -322,6 +324,8 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           sell: Number(item.unit_price) || 0,
           buy: Number(item.unit_cost) || 0,
         }));
+        const payment =
+          String(s.payment_method || '').toLowerCase() === 'lipa_namba' ? 'Lipa Namba' : 'Cash';
 
         return {
           id: s.id,
@@ -329,8 +333,9 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           date: s.created_at?.split('T')[0] || today(),
           branch: s.branch_id,
           cashier: s.cashier_id || 'Unknown',
-          payment: (s.payment_method as "Cash" | "Lipa Namba") || 'Cash',
+          payment,
           lines,
+          discount: Number(s.discount) || 0,
           total: Number(s.total) || 0,
           cost: items.reduce((sum: number, item: any) => sum + Number(item.unit_cost || 0) * Number(item.quantity || 0), 0),
           vat: Number(s.tax) || 0,
@@ -599,8 +604,14 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
     cashier: string;
     payment: "Cash" | "Lipa Namba";
     lines: SaleLine[];
+    discount: number;
   }): Promise<Sale> => {
-    const total = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
+    const subtotal = input.lines.reduce((s, l) => s + l.sell * l.qty, 0);
+    const discount = Math.max(0, Math.round(Number(input.discount) || 0));
+    if (discount > subtotal) {
+      throw new Error("Discount cannot be greater than the sale subtotal.");
+    }
+    const total = Math.max(0, subtotal - discount);
     const cost = input.lines.reduce((s, l) => s + l.buy * l.qty, 0);
     const branch: ShopId = input.branch === "all" ? "toto" : input.branch;
     const receiptNumber = ref.current.receipt;
@@ -618,6 +629,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
           quantity: line.qty,
           unitPrice: line.sell,
         })),
+        _discount: discount,
       });
 
       if (saleError) {
@@ -633,6 +645,7 @@ export function TotoStoreProvider({ children }: { children: ReactNode }) {
         cashier: input.cashier,
         payment: input.payment,
         lines: input.lines,
+        discount,
         total,
         cost,
         vat: vatOf(total, ref.current.settings),

@@ -325,10 +325,10 @@ function DashboardInner() {
       toast("No sales recorded yet to export.");
       return;
     }
-    const header = "receipt,date,branch,cashier,payment,total,vat\n";
+    const header = "receipt,date,branch,cashier,payment,discount,total,vat\n";
     const body = sales
       .map((s) =>
-        [s.receipt, s.date, s.branch, s.cashier, s.payment, s.total, s.vat].join(","),
+        [s.receipt, s.date, s.branch, s.cashier, s.payment, s.discount || 0, s.total, s.vat].join(","),
       )
       .join("\n");
     const url = URL.createObjectURL(new Blob([header + body], { type: "text/csv" }));

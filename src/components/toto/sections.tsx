@@ -231,6 +231,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
     `totoz.pos.${activeBranch}.payment`,
     "Cash",
   );
+  const [discountInput, setDiscountInput, clearDiscountInput] = usePersistentState(
+    `totoz.pos.${activeBranch}.discount`,
+    "",
+  );
   const [scanningBarcode, setScanningBarcode] = useState(false);
   const [scanningQR, setScanningQR] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -380,16 +384,21 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
     );
   }
 
-  const total = cart.reduce((sum, i) => sum + i.sell * i.qty, 0);
+  const subtotal = cart.reduce((sum, i) => sum + i.sell * i.qty, 0);
+  const rawDiscount = Math.max(0, Math.round(Number(discountInput) || 0));
+  const discount = Math.min(rawDiscount, subtotal);
+  const total = Math.max(0, subtotal - discount);
   const count = cart.reduce((sum, i) => sum + i.qty, 0);
 
   function clearCompletedSale() {
     clearQuery();
     clearCart();
     clearPay();
+    clearDiscountInput();
   }
 
-  function renderReceiptWindow(sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; total: number; vat: number }) {
+  function renderReceiptWindow(sale: { receipt: number; date: string; branch: BranchId; cashier: string; payment: "Cash" | "Lipa Namba"; lines: SaleLine[]; discount: number; total: number; vat: number }) {
+    const receiptSubtotal = sale.lines.reduce((sum, line) => sum + line.sell * line.qty, 0);
     const rows = sale.lines
       .map(
         (line) => `
@@ -466,6 +475,8 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                 ${rows}
               </tbody>
             </table>
+            <div class="meta total">Subtotal: ${money(receiptSubtotal)}</div>
+            ${sale.discount > 0 ? `<div class="meta">Discount: -${money(sale.discount)}</div>` : ""}
             <div class="meta total">Grand Total: ${money(sale.total)}</div>
             <div class="meta">VAT: ${money(sale.vat)}</div>
             <div class="center" style="margin-top: 16px; font-size: 11px;">Thank you for shopping with Totoz Empire</div>
@@ -524,7 +535,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && add()}
-              placeholder="Scan barcode, QR code or search product"
+              placeholder="Search product name, scan barcode or QR code"
               className="min-h-11 w-full rounded-xl border border-pink-200 bg-white/90 px-3 pr-9 text-sm outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-200"
               autoFocus
             />
@@ -661,6 +672,30 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
             <span>Items</span>
             <span className="font-mono text-slate-800">{count}</span>
           </div>
+          <div className="flex justify-between text-slate-500">
+            <span>Subtotal</span>
+            <span className="font-mono text-slate-800">{money(subtotal)}</span>
+          </div>
+          <Field label="Discount">
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={discountInput}
+              onChange={(event) => setDiscountInput(event.target.value)}
+              placeholder="0"
+              className={field}
+            />
+          </Field>
+          {rawDiscount > subtotal && (
+            <p className="text-[11px] text-red-500">
+              Discount cannot be more than {money(subtotal)}.
+            </p>
+          )}
+          <div className="flex justify-between text-slate-500">
+            <span>Discount</span>
+            <span className="font-mono text-slate-800">-{money(discount)}</span>
+          </div>
           <div className="flex justify-between pt-1 text-base">
             <span className="font-semibold text-slate-800">Total</span>
             <strong className="font-mono text-violet-700">{money(total)}</strong>
@@ -690,6 +725,10 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
               toast("Add at least one product before completing a sale.");
               return;
             }
+            if (rawDiscount > subtotal) {
+              toast("Discount cannot be greater than the sale subtotal.");
+              return;
+            }
 
             try {
               const sale = await recordSale({
@@ -697,6 +736,7 @@ export function PosSection({ shop, cashier }: { shop: BranchId; cashier: string 
                 cashier,
                 payment: pay,
                 lines: cart.map(({ stock: _stock, ...line }) => line),
+                discount,
               });
 
               toast(`Receipt #${String(sale.receipt).padStart(4, "0")} completed`, {
@@ -2288,6 +2328,7 @@ export function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner
               <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Branch</th>
               <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Cashier</th>
               <th className="px-4 py-3 text-left font-medium" style={{ color: colors.textMuted }}>Payment</th>
+              <th className="px-4 py-3 text-right font-medium" style={{ color: colors.textMuted }}>Discount</th>
               <th className="px-4 py-3 text-right font-medium" style={{ color: colors.textMuted }}>Total</th>
               <th className="px-4 py-3 text-right font-medium" style={{ color: colors.textMuted }}>VAT</th>
             </tr>
@@ -2302,6 +2343,9 @@ export function SalesSection({ shop, isOwner = true }: { shop: BranchId; isOwner
                 <td className="px-4 py-3" style={{ color: colors.textDark }}>{branchLabel(sale.branch)}</td>
                 <td className="px-4 py-3" style={{ color: colors.textDark }}>{sale.cashier}</td>
                 <td className="px-4 py-3 capitalize" style={{ color: colors.textDark }}>{sale.payment}</td>
+                <td className="px-4 py-3 text-right font-mono" style={{ color: colors.textMuted }}>
+                  {money(sale.discount || 0)}
+                </td>
                 <td className="px-4 py-3 text-right font-mono font-semibold" style={{ color: colors.textDark }}>
                   {money(sale.total)}
                 </td>

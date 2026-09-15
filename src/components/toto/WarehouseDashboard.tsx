@@ -8,6 +8,7 @@ import {
   Warehouse,
   ImagePlus,
   Pencil,
+  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -146,6 +147,10 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
   const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
   const [removeEditImage, setRemoveEditImage] = useState(false);
   const [productSaving, setProductSaving] = useState(false);
+  const [inventorySearch, setInventorySearch, clearInventorySearch] = usePersistentState(
+    `totoz.warehouse.${warehouse.id}.inventorySearch`,
+    "",
+  );
 
   const handleImageSelect = (file?: File) => {
     if (!file) return;
@@ -231,6 +236,18 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
     }),
     [inventory, served],
   );
+  const filteredInventory = useMemo(() => {
+    const needle = inventorySearch.trim().toLowerCase();
+    if (!needle) return inventory;
+    return inventory.filter((row) => {
+      const product = row.catalog_products;
+      return (
+        product?.name.toLowerCase().includes(needle) ||
+        product?.sku.toLowerCase().includes(needle) ||
+        (product?.barcode ?? "").toLowerCase().includes(needle)
+      );
+    });
+  }, [inventory, inventorySearch]);
 
   const submitReceipt = async () => {
     const qty = Number(quantity);
@@ -772,17 +789,44 @@ export function WarehouseDashboard({ warehouse, onBack, onLogout, onArchive }: P
                   <Panel>
                     <PanelHead
                       title="Stock available"
-                      description={`${inventory.length} catalog products in this warehouse.`}
+                      description={`${filteredInventory.length} of ${inventory.length} catalog products shown.`}
                     >
                       <button className={btnPrimary} onClick={() => setView("receive")}>
                         Add stock
                       </button>
                     </PanelHead>
+                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <label className="relative min-w-0 flex-1">
+                        <span className="sr-only">Search product by name</span>
+                        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={inventorySearch}
+                          onChange={(event) => setInventorySearch(event.target.value)}
+                          placeholder="Search product by name"
+                          className="min-h-10 w-full rounded-lg border bg-white px-9 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                        />
+                      </label>
+                      {inventorySearch && (
+                        <button
+                          type="button"
+                          className={btn}
+                          onClick={clearInventorySearch}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                     <InventoryList
-                      rows={inventory}
+                      rows={filteredInventory}
                       onEdit={openProductEditor}
                       onDelete={(row) => void deleteProduct(row)}
                       saving={productSaving}
+                      emptyTitle={inventorySearch ? "No product found" : "No stock received"}
+                      emptyCopy={
+                        inventorySearch
+                          ? "Try another product name."
+                          : "Use Add stock to create the first warehouse receipt."
+                      }
                     />
                   </Panel>
                 )}
@@ -1154,17 +1198,21 @@ function InventoryList({
   onEdit,
   onDelete,
   saving = false,
+  emptyTitle = "No stock received",
+  emptyCopy = "Use Add stock to create the first warehouse receipt.",
 }: {
   rows: InventoryBalance[];
   onEdit?: (row: InventoryBalance) => void;
   onDelete?: (row: InventoryBalance) => void;
   saving?: boolean;
+  emptyTitle?: string;
+  emptyCopy?: string;
 }) {
   if (!rows.length)
     return (
       <EmptyState
-        title="No stock received"
-        copy="Use Add stock to create the first warehouse receipt."
+        title={emptyTitle}
+        copy={emptyCopy}
       />
     );
   return (
